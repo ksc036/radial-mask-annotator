@@ -62,7 +62,7 @@ The first point that exceeds the threshold becomes the polygon vertex for that r
 
 ### Threshold Estimation
 
-After the user clicks the center, the app samples gradients across all rays from radius `1` through the initial `max radius`. The default threshold is the 85th percentile of those absolute gradient values, clamped to the inclusive range `8..80` on the `0..255` grayscale scale.
+After the user clicks the center, the app samples gradients across all rays from radius `1` through the initial `max radius`. The default threshold is the 85th percentile of non-zero absolute gradient values, clamped to the inclusive range `8..80` on the `0..255` grayscale scale. If no non-zero gradients are observed, the default threshold is `8`.
 
 The threshold remains user-adjustable because microscopy images vary by stain, lighting, exposure, and background noise.
 
