@@ -26,7 +26,7 @@ The target object is a rounded cell-nucleus-like region with visible contrast ag
 The first version includes:
 
 - Ray count selector: `16`, `32`, `64`, `128`, with `32` as the default.
-- Gradient threshold slider, initialized from an automatic estimate.
+- Gradient threshold slider, initialized to `24` and then preserved as the user's last-used value.
 - Max radius slider to limit how far rays search.
 - Step size slider to control sampling distance along each ray.
 
@@ -60,9 +60,9 @@ Starting from the clicked center, each ray advances outward by `step size` until
 
 The first point that exceeds the threshold becomes the polygon vertex for that ray.
 
-### Threshold Estimation
+### Threshold Behavior
 
-After the user clicks the center, the app samples gradients across all rays from radius `1` through the initial `max radius`. The default threshold is the 85th percentile of non-zero absolute gradient values, clamped to the inclusive range `8..80` on the `0..255` grayscale scale. If no non-zero gradients are observed, the default threshold is `8`.
+The app starts with a threshold value of `24` on the `0..255` grayscale scale. After the user changes the threshold slider, the app keeps that last-used value across image uploads and center clicks instead of replacing it with an automatic estimate.
 
 The threshold remains user-adjustable because microscopy images vary by stain, lighting, exposure, and background noise.
 
@@ -85,7 +85,6 @@ src/
   algorithm/
     grayscale.ts
     radialBoundary.ts
-    threshold.ts
   components/
     ImageCanvas.tsx
   App.tsx
@@ -102,7 +101,7 @@ Core state:
 - Grayscale pixel buffer.
 - Center point, if selected.
 - Ray count.
-- Gradient threshold.
+- Gradient threshold, preserved as the last-used value.
 - Max radius.
 - Step size.
 - Polygon result, including detected and fallback endpoints.
@@ -134,6 +133,7 @@ UI smoke tests should verify that the app renders, accepts an uploaded image con
 - Multiple clicked centers.
 - Batch processing.
 - OpenCV or Python backend.
+- Automatic threshold estimation.
 - Polygon smoothing, outlier rejection, or convex hull cleanup.
 - Export formats such as JSON, CSV, SVG, or masks.
 

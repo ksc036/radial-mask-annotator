@@ -21,7 +21,6 @@
 - Create `src/components/ImageCanvas.tsx`: canvas rendering, image scaling, click coordinate conversion, overlay drawing.
 - Create `src/algorithm/grayscale.ts`: RGB-to-grayscale conversion.
 - Create `src/algorithm/radialBoundary.ts`: ray sampling and polygon generation.
-- Create `src/algorithm/threshold.ts`: default threshold estimation.
 - Create `src/algorithm/*.test.ts`: TDD coverage for algorithm behavior.
 - Create `src/styles.css`: app styling.
 
@@ -157,37 +156,7 @@ Run: `npm test -- src/algorithm/radialBoundary.test.ts`
 
 Expected: PASS.
 
-## Task 4: Threshold Estimation
-
-**Files:**
-- Create: `src/algorithm/threshold.test.ts`
-- Create: `src/algorithm/threshold.ts`
-
-- [ ] **Step 1: Write failing tests**
-
-Verify:
-
-- The estimator returns a value in `8..80`.
-- The estimator returns a higher value for a sharp circle than a uniform image.
-- The estimator is stable for empty gradient distributions by returning `8`.
-
-- [ ] **Step 2: Run red test**
-
-Run: `npm test -- src/algorithm/threshold.test.ts`
-
-Expected: FAIL because `estimateGradientThreshold` does not exist.
-
-- [ ] **Step 3: Implement estimator**
-
-Sample non-zero absolute adjacent gradients across all rays, sort ascending, choose the 85th percentile, and clamp to `8..80`. If no non-zero gradients are observed, return `8`.
-
-- [ ] **Step 4: Run green test**
-
-Run: `npm test -- src/algorithm/threshold.test.ts`
-
-Expected: PASS.
-
-## Task 5: Canvas App UI
+## Task 4: Canvas App UI
 
 **Files:**
 - Create: `src/components/ImageCanvas.tsx`
@@ -215,6 +184,7 @@ Build a single-screen workspace with:
 - click-to-set center behavior
 - overlay for center, endpoints, fallback endpoints, polygon
 - controls for ray count, threshold, max radius, step size
+- threshold preserved as the user's last-used value across uploads and center clicks
 - status text for no image, no center, and fallback count
 
 - [ ] **Step 4: Run green test**
@@ -223,7 +193,7 @@ Run: `npm test -- src/App.test.tsx`
 
 Expected: PASS.
 
-## Task 6: Final Verification
+## Task 5: Final Verification
 
 **Files:**
 - Modify only if verification reveals issues.
@@ -252,6 +222,6 @@ Open `http://127.0.0.1:4173` in the in-app browser and verify the workspace rend
 
 ## Self-Review
 
-- Spec coverage: upload, grayscale conversion, center click, 16/32/64/128 rays, automatic threshold, manual controls, fallback display, raw polygon, and testing are each covered.
+- Spec coverage: upload, grayscale conversion, center click, 16/32/64/128 rays, manual threshold preservation, manual controls, fallback display, raw polygon, and testing are each covered.
 - Placeholder scan: no unresolved placeholder work remains.
 - Type consistency: point, boundary, and options names are defined before use.

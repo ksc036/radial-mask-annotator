@@ -2,7 +2,6 @@ import { Upload } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { rgbToGrayscale } from './algorithm/grayscale';
 import { findRadialBoundary, type BoundaryPoint, type Point } from './algorithm/radialBoundary';
-import { estimateGradientThreshold } from './algorithm/threshold';
 import ImageCanvas from './components/ImageCanvas';
 
 const RAY_COUNTS = [16, 32, 64, 128];
@@ -50,26 +49,10 @@ export default function App() {
     setGrayscale(gray);
     setCenter(null);
     setMaxRadius(defaultMaxRadius);
-    setThreshold(24);
   }
 
   function handleCenterChange(nextCenter: Point) {
     setCenter(nextCenter);
-
-    if (!image || !grayscale) {
-      return;
-    }
-
-    setThreshold(
-      estimateGradientThreshold(grayscale, {
-        width: image.naturalWidth,
-        height: image.naturalHeight,
-        center: nextCenter,
-        rayCount,
-        maxRadius,
-        stepSize,
-      }),
-    );
   }
 
   return (
