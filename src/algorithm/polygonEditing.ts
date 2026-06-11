@@ -10,6 +10,15 @@ export interface SavedAnnotation {
   areaPixels: number;
   vertexCount: number;
   excludedCount: number;
+  visible: boolean;
+  displayPoints: EffectivePolygonPoint[];
+  editedRadii: Record<number, number>;
+  manualExcludedIndices: number[];
+  rayCount: number;
+  threshold: number;
+  maxRadius: number;
+  stepSize: number;
+  outlierThreshold: number;
 }
 
 export function distanceFromCenter(point: Point, center: Point) {

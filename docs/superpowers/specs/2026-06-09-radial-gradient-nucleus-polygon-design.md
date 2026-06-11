@@ -179,6 +179,10 @@ After saving, the current annotation remains visible and the user can click anot
 
 If `s` cannot save because there is no center or fewer than three effective polygon vertices, the app shows a visible save status message instead of failing silently. Successful saves also show an immediate status message.
 
+Each saved annotation has a visual toggle. Turning visual off hides only that saved polygon overlay; it does not delete the annotation or affect CSV export.
+
+Each saved annotation also has an edit action. Editing restores that annotation's center, ray settings, threshold settings, manually edited radii, and manually excluded points into the active editor. The edited saved overlay is hidden while it is loaded into the editor so the current editable polygon does not visually overlap its saved copy.
+
 ### CSV Export
 
 Add CSV export for saved annotations. The MVP columns are:

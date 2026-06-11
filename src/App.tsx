@@ -1,4 +1,4 @@
-import { Download, EyeOff, Upload } from 'lucide-react';
+import { Download, Eye, EyeOff, Pencil, Upload } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { rgbToGrayscale } from './algorithm/grayscale';
 import {
@@ -63,6 +63,13 @@ export default function App() {
   const effectivePolygon = useMemo(
     () => getEffectivePolygonPoints(polygon, autoExcludedIndices, manualExcludedIndices),
     [autoExcludedIndices, manualExcludedIndices, polygon],
+  );
+  const visibleSavedOverlays = useMemo(
+    () =>
+      savedAnnotations
+        .filter((annotation) => annotation.visible)
+        .map((annotation) => ({ id: annotation.id, effectivePoints: annotation.displayPoints })),
+    [savedAnnotations],
   );
   const excludedCount = autoExcludedIndices.size + manualExcludedIndices.size;
   const fallbackCount = effectivePolygon.filter((point) => point.fallback).length;
@@ -157,17 +164,52 @@ export default function App() {
       return;
     }
 
+    const nextId = savedAnnotations.length + 1;
+
     setSavedAnnotations((current) => [
       ...current,
       {
-        id: current.length + 1,
-        center,
+        id: nextId,
+        center: { ...center },
         areaPixels,
         vertexCount: effectivePolygon.length,
         excludedCount,
+        visible: true,
+        displayPoints: effectivePolygon.map((point) => ({ ...point })),
+        editedRadii: { ...editedRadii },
+        manualExcludedIndices: Array.from(manualExcludedIndices),
+        rayCount,
+        threshold,
+        maxRadius,
+        stepSize,
+        outlierThreshold,
       },
     ]);
-    setSaveStatus(`Saved annotation ${savedAnnotations.length + 1}.`);
+    setSaveStatus(`Saved annotation ${nextId}.`);
+  }
+
+  function toggleSavedVisual(annotationId: number) {
+    setSavedAnnotations((current) =>
+      current.map((annotation) =>
+        annotation.id === annotationId ? { ...annotation, visible: !annotation.visible } : annotation,
+      ),
+    );
+  }
+
+  function editSavedAnnotation(annotation: SavedAnnotation) {
+    setCenter({ ...annotation.center });
+    setRayCount(annotation.rayCount);
+    setThreshold(annotation.threshold);
+    setMaxRadius(annotation.maxRadius);
+    setStepSize(annotation.stepSize);
+    setOutlierThreshold(annotation.outlierThreshold);
+    setEditedRadii({ ...annotation.editedRadii });
+    setManualExcludedIndices(new Set(annotation.manualExcludedIndices));
+    setHoveredPointIndex(null);
+    setSavedAnnotations((current) =>
+      current.map((item) => (item.id === annotation.id ? { ...item, visible: false } : item)),
+    );
+    setSaveStatus(`Editing annotation ${annotation.id}.`);
   }
 
   function exportCsv() {
@@ -194,6 +236,7 @@ export default function App() {
             manualExcludedIndices={manualExcludedIndices}
             pointOpacity={pointOpacity}
             hoveredPointIndex={hoveredPointIndex}
+            savedOverlays={visibleSavedOverlays}
             onCenterChange={handleCenterChange}
             onPointHover={setHoveredPointIndex}
             onPointRadiusChange={handlePointRadiusChange}
@@ -296,8 +339,30 @@ export default function App() {
               <ol>
                 {savedAnnotations.map((annotation) => (
                   <li key={annotation.id}>
-                    <strong>Annotation {annotation.id}</strong>
-                    <span>Area: {Math.round(annotation.areaPixels)} px</span>
+                    <div className="saved-summary">
+                      <strong>Annotation {annotation.id}</strong>
+                      <span>Area: {Math.round(annotation.areaPixels)} px</span>
+                    </div>
+                    <div className="saved-actions">
+                      <button
+                        className="icon-action"
+                        type="button"
+                        onClick={() => toggleSavedVisual(annotation.id)}
+                        aria-label={`${annotation.visible ? 'Hide' : 'Show'} visual for annotation ${annotation.id}`}
+                        title={`${annotation.visible ? 'Hide' : 'Show'} visual`}
+                      >
+                        {annotation.visible ? <EyeOff size={16} aria-hidden="true" /> : <Eye size={16} aria-hidden="true" />}
+                      </button>
+                      <button
+                        className="icon-action"
+                        type="button"
+                        onClick={() => editSavedAnnotation(annotation)}
+                        aria-label={`Edit annotation ${annotation.id}`}
+                        title="Edit annotation"
+                      >
+                        <Pencil size={16} aria-hidden="true" />
+                      </button>
+                    </div>
                   </li>
                 ))}
               </ol>

@@ -66,6 +66,15 @@ describe('polygon editing utilities', () => {
         areaPixels: 123.4,
         vertexCount: 27,
         excludedCount: 5,
+        visible: true,
+        displayPoints: [],
+        editedRadii: {},
+        manualExcludedIndices: [],
+        rayCount: 32,
+        threshold: 24,
+        maxRadius: 120,
+        stepSize: 1,
+        outlierThreshold: 35,
       },
     ];
 

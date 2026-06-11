@@ -184,6 +184,86 @@ input[type='range'] {
   font-weight: 800;
 }
 
+.button-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.secondary-action,
+.icon-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #c8beab;
+  border-radius: 4px;
+  background: #ffffff;
+  color: #202922;
+  cursor: pointer;
+}
+
+.secondary-action {
+  gap: 8px;
+  min-height: 40px;
+  padding: 0 10px;
+  font-size: 0.86rem;
+}
+
+.icon-action {
+  width: 34px;
+  height: 34px;
+  padding: 0;
+}
+
+.secondary-action:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.saved-list h2 {
+  margin: 0 0 10px;
+  font-size: 1rem;
+}
+
+.saved-list p {
+  margin: 0;
+  color: #686154;
+}
+
+.saved-list ol {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.saved-list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  border-top: 1px solid #d9d0bf;
+  padding-top: 10px;
+}
+
+.saved-summary {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.saved-summary span {
+  color: #686154;
+  font-size: 0.88rem;
+}
+
+.saved-actions {
+  display: inline-flex;
+  flex: 0 0 auto;
+  gap: 6px;
+}
+
 @media (max-width: 860px) {
   .app-shell {
     padding: 12px;

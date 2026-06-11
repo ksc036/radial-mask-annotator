@@ -7,6 +7,7 @@ interface ImageCanvasProps {
   center: Point | null;
   points: BoundaryPoint[];
   effectivePoints: EffectivePolygonPoint[];
+  savedOverlays?: SavedPolygonOverlay[];
   autoExcludedIndices: Set<number>;
   manualExcludedIndices: Set<number>;
   pointOpacity: number;
@@ -17,11 +18,17 @@ interface ImageCanvasProps {
   onPointToggleExcluded: (index: number) => void;
 }
 
+interface SavedPolygonOverlay {
+  id: number;
+  effectivePoints: EffectivePolygonPoint[];
+}
+
 export default function ImageCanvas({
   image,
   center,
   points,
   effectivePoints,
+  savedOverlays = [],
   autoExcludedIndices,
   manualExcludedIndices,
   pointOpacity,
@@ -56,8 +63,9 @@ export default function ImageCanvas({
 
     const layout = getCanvasImageLayout(canvas, image);
     context.drawImage(image, layout.x, layout.y, layout.width, layout.height);
+    drawSavedOverlays(context, layout, savedOverlays);
     drawOverlay(context, layout, center, points, effectivePoints, autoExcludedIndices, manualExcludedIndices, pointOpacity, hoveredPointIndex);
-  }, [autoExcludedIndices, center, effectivePoints, hoveredPointIndex, image, manualExcludedIndices, pointOpacity, points]);
+  }, [autoExcludedIndices, center, effectivePoints, hoveredPointIndex, image, manualExcludedIndices, pointOpacity, points, savedOverlays]);
 
   function handlePointerDown(event: React.PointerEvent<HTMLCanvasElement>) {
     const canvas = canvasRef.current;
@@ -210,6 +218,30 @@ function drawOverlay(
     context.lineWidth = 3;
     context.stroke();
   }
+}
+
+function drawSavedOverlays(context: CanvasRenderingContext2D, layout: CanvasImageLayout, savedOverlays: SavedPolygonOverlay[]) {
+  savedOverlays.forEach((overlay) => {
+    if (overlay.effectivePoints.length < 2) {
+      return;
+    }
+
+    context.beginPath();
+    overlay.effectivePoints.forEach((point, index) => {
+      const canvasPoint = imageToCanvasPoint(point, layout);
+      if (index === 0) {
+        context.moveTo(canvasPoint.x, canvasPoint.y);
+      } else {
+        context.lineTo(canvasPoint.x, canvasPoint.y);
+      }
+    });
+    context.closePath();
+    context.fillStyle = 'rgb(11 95 131 / 0.1)';
+    context.strokeStyle = '#0b5f83';
+    context.lineWidth = 2;
+    context.fill();
+    context.stroke();
+  });
 }
 
 function getCanvasPointerPoint(

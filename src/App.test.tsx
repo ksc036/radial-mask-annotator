@@ -4,15 +4,24 @@ import App from './App';
 
 vi.mock('./components/ImageCanvas', () => ({
   default: ({
+    center,
+    points,
+    savedOverlays = [],
     onCenterChange,
     onPointHover,
     onPointRadiusChange,
   }: {
+    center?: { x: number; y: number } | null;
+    points?: Array<unknown>;
+    savedOverlays?: Array<unknown>;
     onCenterChange: (point: { x: number; y: number }) => void;
     onPointHover?: (index: number | null) => void;
     onPointRadiusChange?: (index: number, radius: number) => void;
   }) => (
     <div>
+      <span data-testid="mock-center">{center ? `${center.x},${center.y}` : 'none'}</span>
+      <span data-testid="mock-current-points">{points?.length ?? 0}</span>
+      <span data-testid="mock-saved-overlays">{savedOverlays.length}</span>
       <button type="button" onClick={() => onCenterChange({ x: 4, y: 4 })}>
         Mock canvas click
       </button>
@@ -105,6 +114,84 @@ describe('App', () => {
     });
     expect(within(screen.getByLabelText(/saved annotations/i)).getByText(/Annotation 1/i)).toBeInTheDocument();
     expect(within(screen.getByLabelText(/saved annotations/i)).getByText(/Area:/i)).toBeInTheDocument();
+  });
+
+  it('keeps the current editing overlay after saving with s', async () => {
+    render(<App />);
+
+    fireEvent.change(screen.getByLabelText(/upload image/i), {
+      target: { files: [new File(['fake'], 'nucleus.png', { type: 'image/png' })] },
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText('Click the center of one round nucleus.')).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Mock canvas click' }));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('mock-current-points')).not.toHaveTextContent('0');
+    });
+
+    fireEvent.keyDown(window, { key: 's' });
+
+    await waitFor(() => {
+      expect(screen.getByText(/Saved annotation 1/i)).toBeInTheDocument();
+    });
+    expect(screen.getByTestId('mock-center')).toHaveTextContent('4,4');
+    expect(screen.getByTestId('mock-current-points')).not.toHaveTextContent('0');
+  });
+
+  it('toggles saved annotation visuals independently', async () => {
+    render(<App />);
+
+    fireEvent.change(screen.getByLabelText(/upload image/i), {
+      target: { files: [new File(['fake'], 'nucleus.png', { type: 'image/png' })] },
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText('Click the center of one round nucleus.')).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Mock canvas click' }));
+    fireEvent.keyDown(window, { key: 's' });
+
+    await waitFor(() => {
+      expect(screen.getByTestId('mock-saved-overlays')).toHaveTextContent('1');
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: /hide visual for annotation 1/i }));
+
+    expect(screen.getByTestId('mock-saved-overlays')).toHaveTextContent('0');
+
+    fireEvent.click(screen.getByRole('button', { name: /show visual for annotation 1/i }));
+
+    expect(screen.getByTestId('mock-saved-overlays')).toHaveTextContent('1');
+  });
+
+  it('restores a saved annotation into the editor when edit is clicked', async () => {
+    render(<App />);
+
+    fireEvent.change(screen.getByLabelText(/upload image/i), {
+      target: { files: [new File(['fake'], 'nucleus.png', { type: 'image/png' })] },
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText('Click the center of one round nucleus.')).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Mock canvas click' }));
+    fireEvent.keyDown(window, { key: 's' });
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /edit annotation 1/i })).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: /edit annotation 1/i }));
+
+    expect(screen.getByText(/Editing annotation 1/i)).toBeInTheDocument();
+    expect(screen.getByTestId('mock-center')).toHaveTextContent('4,4');
+    expect(screen.getByTestId('mock-saved-overlays')).toHaveTextContent('0');
   });
 
   it('toggles hovered point removal with r and restores it with r again', async () => {
