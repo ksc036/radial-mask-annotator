@@ -32,6 +32,7 @@ describe('ImageCanvas', () => {
         onPointToggleExcluded={onPointToggleExcluded}
         onSavedOverlayEdit={vi.fn()}
         onPointerImageMove={vi.fn()}
+        onImageDrop={vi.fn()}
       />,
     );
 
@@ -92,6 +93,7 @@ describe('ImageCanvas', () => {
         onPointToggleExcluded={vi.fn()}
         onSavedOverlayEdit={onSavedOverlayEdit}
         onPointerImageMove={vi.fn()}
+        onImageDrop={vi.fn()}
       />,
     );
 
@@ -112,5 +114,82 @@ describe('ImageCanvas', () => {
 
     expect(onSavedOverlayEdit).toHaveBeenCalledWith(7);
     expect(onCenterChange).not.toHaveBeenCalled();
+  });
+
+  it('passes a dropped image file to the upload handler', () => {
+    const onImageDrop = vi.fn();
+
+    render(
+      <ImageCanvas
+        image={null}
+        center={null}
+        points={[]}
+        effectivePoints={[]}
+        autoExcludedIndices={new Set()}
+        manualExcludedIndices={new Set()}
+        pointOpacity={0.85}
+        lineOpacity={0.9}
+        polygonOpacity={0.16}
+        hoveredPointIndex={null}
+        savedOverlays={[]}
+        onCenterChange={vi.fn()}
+        onPointHover={vi.fn()}
+        onPointSelect={vi.fn()}
+        onPointRadiusChange={vi.fn()}
+        onPointToggleExcluded={vi.fn()}
+        onSavedOverlayEdit={vi.fn()}
+        onPointerImageMove={vi.fn()}
+        onImageDrop={onImageDrop}
+      />,
+    );
+
+    const file = new File(['fake'], 'drop.png', { type: 'image/png' });
+    const canvas = screen.getByLabelText('Image annotation canvas');
+
+    fireEvent.drop(canvas, {
+      dataTransfer: {
+        files: [file],
+      },
+    });
+
+    expect(onImageDrop).toHaveBeenCalledWith(file);
+  });
+
+  it('accepts browser dragover events before dropped files are available', () => {
+    render(
+      <ImageCanvas
+        image={null}
+        center={null}
+        points={[]}
+        effectivePoints={[]}
+        autoExcludedIndices={new Set()}
+        manualExcludedIndices={new Set()}
+        pointOpacity={0.85}
+        lineOpacity={0.9}
+        polygonOpacity={0.16}
+        hoveredPointIndex={null}
+        savedOverlays={[]}
+        onCenterChange={vi.fn()}
+        onPointHover={vi.fn()}
+        onPointSelect={vi.fn()}
+        onPointRadiusChange={vi.fn()}
+        onPointToggleExcluded={vi.fn()}
+        onSavedOverlayEdit={vi.fn()}
+        onPointerImageMove={vi.fn()}
+        onImageDrop={vi.fn()}
+      />,
+    );
+
+    const canvas = screen.getByLabelText('Image annotation canvas');
+
+    fireEvent.dragOver(canvas, {
+      dataTransfer: {
+        files: [],
+        items: [{ kind: 'file', type: 'image/png' }],
+        dropEffect: 'none',
+      },
+    });
+
+    expect(canvas).toHaveClass('image-canvas-drag-active');
   });
 });

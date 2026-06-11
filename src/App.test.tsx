@@ -15,6 +15,7 @@ vi.mock('./components/ImageCanvas', () => ({
     onPointRadiusChange,
     onPointSelect,
     onPointerImageMove,
+    onImageDrop,
     removalRange,
   }: {
     center?: { x: number; y: number } | null;
@@ -29,6 +30,7 @@ vi.mock('./components/ImageCanvas', () => ({
     onPointRadiusChange?: (index: number, radius: number) => void;
     onPointSelect?: (index: number | null) => void;
     onPointerImageMove?: (point: { x: number; y: number } | null) => void;
+    onImageDrop?: (file: File) => void;
   }) => (
     <div>
       <span data-testid="mock-center">{center ? `${center.x},${center.y}` : 'none'}</span>
@@ -63,6 +65,12 @@ vi.mock('./components/ImageCanvas', () => ({
       </button>
       <button type="button" onClick={() => onPointerImageMove?.({ x: 10, y: 10 })}>
         Mock pointer at bottom right
+      </button>
+      <button
+        type="button"
+        onClick={() => onImageDrop?.(new File(['fake'], 'dropped-nucleus.png', { type: 'image/png' }))}
+      >
+        Mock image drop
       </button>
     </div>
   ),
@@ -108,13 +116,15 @@ describe('App', () => {
     expect(screen.getByLabelText(/point opacity/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/line opacity/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/polygon opacity/i)).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /save annotation/i })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /save annotation/i })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /remove hovered point/i })).not.toBeInTheDocument();
     expect(within(screen.getByLabelText(/saved annotations/i)).getByRole('button', { name: /export csv/i })).toBeInTheDocument();
   });
 
   it('passes separate view opacity settings to the canvas', () => {
     render(<App />);
+
+    expect(screen.getByTestId('mock-opacities')).toHaveTextContent('0.25/0.25/0.25');
 
     fireEvent.change(screen.getByLabelText(/point opacity/i), { target: { value: '0.45' } });
     fireEvent.change(screen.getByLabelText(/line opacity/i), { target: { value: '0.65' } });
@@ -141,6 +151,16 @@ describe('App', () => {
 
     await waitFor(() => {
       expect(screen.getByLabelText(/gradient threshold/i)).toHaveValue('55');
+    });
+  });
+
+  it('loads an image dropped on the canvas', async () => {
+    render(<App />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Mock image drop' }));
+
+    await waitFor(() => {
+      expect(screen.getByText('Click the center of one round nucleus.')).toBeInTheDocument();
     });
   });
 
@@ -185,26 +205,7 @@ describe('App', () => {
     });
   });
 
-  it('saves the current annotation with the save button', async () => {
-    render(<App />);
-
-    fireEvent.change(screen.getByLabelText(/upload image/i), {
-      target: { files: [new File(['fake'], 'nucleus.png', { type: 'image/png' })] },
-    });
-
-    await waitFor(() => {
-      expect(screen.getByText('Click the center of one round nucleus.')).toBeInTheDocument();
-    });
-
-    fireEvent.click(screen.getByRole('button', { name: 'Mock canvas click' }));
-    fireEvent.click(screen.getByRole('button', { name: /save annotation/i }));
-
-    await waitFor(() => {
-      expect(screen.getByText(/Saved annotation 1/i)).toBeInTheDocument();
-    });
-  });
-
-  it('keeps the current editing overlay after saving with s', async () => {
+  it('keeps the saved overlay and readies the next center after saving with s', async () => {
     render(<App />);
 
     fireEvent.change(screen.getByLabelText(/upload image/i), {
@@ -226,8 +227,12 @@ describe('App', () => {
     await waitFor(() => {
       expect(screen.getByText(/Saved annotation 1/i)).toBeInTheDocument();
     });
-    expect(screen.getByTestId('mock-center')).toHaveTextContent('4,4');
-    expect(screen.getByTestId('mock-current-points')).not.toHaveTextContent('0');
+    expect(screen.getByTestId('mock-center')).toHaveTextContent('none');
+    expect(screen.getByTestId('mock-saved-overlays')).toHaveTextContent('1');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Mock canvas click elsewhere' }));
+
+    expect(screen.getByTestId('mock-center')).toHaveTextContent('7,7');
   });
 
   it('toggles saved annotation visuals independently', async () => {
@@ -275,6 +280,7 @@ describe('App', () => {
       expect(screen.getByText(/Saved annotation 1/i)).toBeInTheDocument();
     });
 
+    fireEvent.click(screen.getByRole('button', { name: 'Mock canvas click elsewhere' }));
     fireEvent.keyDown(window, { key: 's' });
 
     await waitFor(() => {

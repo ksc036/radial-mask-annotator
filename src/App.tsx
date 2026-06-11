@@ -1,4 +1,4 @@
-import { Download, Eye, EyeOff, Pencil, Save, Trash2, Upload } from 'lucide-react';
+import { Download, Eye, EyeOff, Pencil, Trash2, Upload } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { rgbToGrayscale } from './algorithm/grayscale';
 import { getWorkingImageSize, wasImageResized } from './algorithm/imageProcessing';
@@ -33,9 +33,9 @@ export default function App() {
   const [threshold, setThreshold] = useState(24);
   const [maxRadius, setMaxRadius] = useState(120);
   const [outlierThreshold, setOutlierThreshold] = useState(35);
-  const [pointOpacity, setPointOpacity] = useState(0.85);
-  const [lineOpacity, setLineOpacity] = useState(0.9);
-  const [polygonOpacity, setPolygonOpacity] = useState(0.16);
+  const [pointOpacity, setPointOpacity] = useState(0.25);
+  const [lineOpacity, setLineOpacity] = useState(0.25);
+  const [polygonOpacity, setPolygonOpacity] = useState(0.25);
   const [editedRadii, setEditedRadii] = useState<Record<number, number>>({});
   const [manualExcludedIndices, setManualExcludedIndices] = useState<Set<number>>(() => new Set());
   const [hoveredPointIndex, setHoveredPointIndex] = useState<number | null>(null);
@@ -173,6 +173,10 @@ export default function App() {
       return;
     }
 
+    await loadImageFile(file);
+  }
+
+  async function loadImageFile(file: File) {
     setSaveStatus('Loading image...');
 
     try {
@@ -374,9 +378,10 @@ export default function App() {
 
       setSavedAnnotations((current) =>
         current.map((annotation) =>
-          annotation.id === activeEditingAnnotationId ? { ...updatedAnnotation, visible: annotation.visible } : annotation,
+          annotation.id === activeEditingAnnotationId ? { ...updatedAnnotation, visible: true } : annotation,
         ),
       );
+      clearEditorForNextCenter();
       setSaveStatus(`Updated annotation ${activeEditingAnnotationId}.`);
       return;
     }
@@ -384,7 +389,20 @@ export default function App() {
     const nextId = Math.max(0, ...savedAnnotations.map((annotation) => annotation.id)) + 1;
 
     setSavedAnnotations((current) => [...current, buildSavedAnnotation(nextId, true, center)]);
+    clearEditorForNextCenter();
     setSaveStatus(`Saved annotation ${nextId}.`);
+  }
+
+  function clearEditorForNextCenter() {
+    setCenter(null);
+    setEditedRadii({});
+    setManualExcludedIndices(new Set());
+    setHoveredPointIndex(null);
+    setSelectedPointIndex(null);
+    setCurrentImagePointer(null);
+    setRemovalRange(null);
+    setActiveEditingAnnotationId(null);
+    setCenterSelectionEnabled(true);
   }
 
   function buildSavedAnnotation(id: number, visible: boolean, annotationCenter: Point): SavedAnnotation {
@@ -482,6 +500,7 @@ export default function App() {
             onPointToggleExcluded={togglePointExclusion}
             onSavedOverlayEdit={editSavedAnnotationById}
             onPointerImageMove={handlePointerImageMove}
+            onImageDrop={loadImageFile}
           />
         </div>
 
@@ -578,13 +597,6 @@ export default function App() {
               <span className="nudge-hint">Use [ / ] to nudge</span>
             </div>
           </section>
-
-          <div className="button-row">
-            <button className="secondary-action" type="button" onClick={saveCurrentAnnotation}>
-              <Save size={16} aria-hidden="true" />
-              Save annotation
-            </button>
-          </div>
 
           <dl className="metrics">
             <div>

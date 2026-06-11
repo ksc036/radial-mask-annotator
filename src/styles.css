@@ -52,6 +52,11 @@ select {
   cursor: crosshair;
 }
 
+.image-canvas-drag-active {
+  outline: 4px solid #0b5f83;
+  outline-offset: -8px;
+}
+
 .control-panel {
   display: flex;
   flex-direction: column;
@@ -197,12 +202,6 @@ input[type='range'] {
   font-size: 1.6rem;
   font-variant-numeric: tabular-nums;
   font-weight: 800;
-}
-
-.button-row {
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: 10px;
 }
 
 .secondary-action,

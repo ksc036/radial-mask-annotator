@@ -22,6 +22,7 @@ interface ImageCanvasProps {
   onPointToggleExcluded: (index: number) => void;
   onSavedOverlayEdit: (id: number) => void;
   onPointerImageMove: (point: Point | null) => void;
+  onImageDrop: (file: File) => void;
 }
 
 interface SavedPolygonOverlay {
@@ -56,9 +57,11 @@ export default function ImageCanvas({
   onPointToggleExcluded,
   onSavedOverlayEdit,
   onPointerImageMove,
+  onImageDrop,
 }: ImageCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const [draggedPointIndex, setDraggedPointIndex] = useState<number | null>(null);
+  const [isImageDragActive, setIsImageDragActive] = useState(false);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -196,12 +199,40 @@ export default function ImageCanvas({
     setDraggedPointIndex(null);
   }
 
+  function handleDragOver(event: React.DragEvent<HTMLCanvasElement>) {
+    if (!hasImageTransfer(event.dataTransfer)) {
+      return;
+    }
+
+    event.preventDefault();
+    event.dataTransfer.dropEffect = 'copy';
+    setIsImageDragActive(true);
+  }
+
+  function handleDragLeave() {
+    setIsImageDragActive(false);
+  }
+
+  function handleDrop(event: React.DragEvent<HTMLCanvasElement>) {
+    event.preventDefault();
+    setIsImageDragActive(false);
+
+    const imageFile = getFirstImageFile(event.dataTransfer.files);
+
+    if (imageFile) {
+      onImageDrop(imageFile);
+    }
+  }
+
   return (
     <canvas
       ref={canvasRef}
-      className="image-canvas"
+      className={`image-canvas${isImageDragActive ? ' image-canvas-drag-active' : ''}`}
       width={1200}
       height={820}
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
       onPointerDown={handlePointerDown}
       onPointerMove={handlePointerMove}
       onPointerLeave={() => {
@@ -213,6 +244,18 @@ export default function ImageCanvas({
       aria-label="Image annotation canvas"
     />
   );
+}
+
+function hasImageTransfer(dataTransfer: DataTransfer) {
+  if (getFirstImageFile(dataTransfer.files)) {
+    return true;
+  }
+
+  return Array.from(dataTransfer.items).some((item) => item.kind === 'file' && item.type.startsWith('image/'));
+}
+
+function getFirstImageFile(files: FileList | File[]) {
+  return Array.from(files).find((file) => file.type.startsWith('image/')) ?? null;
 }
 
 function drawEmptyState(context: CanvasRenderingContext2D, canvas: HTMLCanvasElement) {
