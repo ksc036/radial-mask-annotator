@@ -402,6 +402,33 @@ describe('App', () => {
     expect(screen.queryByText(/Annotation 2/i)).not.toBeInTheDocument();
   });
 
+  it('auto-saves point edits into the active saved annotation without pressing s', async () => {
+    render(<App />);
+
+    fireEvent.change(screen.getByLabelText(/upload image/i), {
+      target: { files: [new File(['fake'], 'nucleus.png', { type: 'image/png' })] },
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText('Click the center of one round nucleus.')).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Mock canvas click' }));
+    fireEvent.keyDown(window, { key: 's' });
+
+    await waitFor(() => {
+      expect(within(screen.getByLabelText(/saved annotations/i)).getByText('Area: 28 px')).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: /edit annotation 1/i }));
+    fireEvent.click(screen.getByRole('button', { name: 'Mock point drag' }));
+
+    await waitFor(() => {
+      expect(within(screen.getByLabelText(/saved annotations/i)).queryByText('Area: 28 px')).not.toBeInTheDocument();
+    });
+    expect(screen.queryByText(/Annotation 2/i)).not.toBeInTheDocument();
+  });
+
   it('does not reset the center from ordinary canvas clicks while editing', async () => {
     render(<App />);
 
@@ -427,7 +454,7 @@ describe('App', () => {
     expect(screen.getByText(/Press c to choose a new center/i)).toBeInTheDocument();
   });
 
-  it('allows center replacement only after c and cancels editing with escape', async () => {
+  it('moves the center to the current pointer with c and cancels editing with escape', async () => {
     render(<App />);
 
     fireEvent.change(screen.getByLabelText(/upload image/i), {
@@ -446,10 +473,10 @@ describe('App', () => {
     });
 
     fireEvent.click(screen.getByRole('button', { name: /edit annotation 1/i }));
+    fireEvent.click(screen.getByRole('button', { name: 'Mock pointer at bottom right' }));
     fireEvent.keyDown(window, { key: 'c', code: 'KeyC' });
-    fireEvent.click(screen.getByRole('button', { name: 'Mock canvas click elsewhere' }));
 
-    expect(screen.getByTestId('mock-center')).toHaveTextContent('7,7');
+    expect(screen.getByTestId('mock-center')).toHaveTextContent('10,10');
 
     fireEvent.keyDown(window, { key: 'Escape', code: 'Escape' });
 

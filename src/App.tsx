@@ -117,7 +117,7 @@ export default function App() {
       }
       if (isShortcutKey(event, 'KeyC', 'c')) {
         event.preventDefault();
-        enableCenterSelection();
+        moveCenterToPointer();
       }
       if (isShortcutKey(event, 'Escape', 'escape')) {
         event.preventDefault();
@@ -139,6 +139,32 @@ export default function App() {
       window.removeEventListener('keyup', handleKeyUp);
     };
   });
+
+  useEffect(() => {
+    if (activeEditingAnnotationId === null || !center || effectivePolygon.length < 3) {
+      return;
+    }
+
+    const updatedAnnotation = buildSavedAnnotation(activeEditingAnnotationId, false, center);
+
+    setSavedAnnotations((current) =>
+      current.map((annotation) =>
+        annotation.id === activeEditingAnnotationId ? { ...updatedAnnotation, visible: annotation.visible } : annotation,
+      ),
+    );
+  }, [
+    activeEditingAnnotationId,
+    areaPixels,
+    center,
+    editedRadii,
+    effectivePolygon,
+    excludedCount,
+    manualExcludedIndices,
+    maxRadius,
+    outlierThreshold,
+    rayCount,
+    threshold,
+  ]);
 
   async function handleUpload(event: React.ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
@@ -188,6 +214,10 @@ export default function App() {
       return;
     }
 
+    applyCenterChange(nextCenter);
+  }
+
+  function applyCenterChange(nextCenter: Point) {
     setCenter(nextCenter);
     setEditedRadii({});
     setManualExcludedIndices(new Set());
@@ -198,13 +228,18 @@ export default function App() {
     setSaveStatus('');
   }
 
-  function enableCenterSelection() {
+  function moveCenterToPointer() {
     if (!image) {
       return;
     }
 
-    setCenterSelectionEnabled(true);
-    setSaveStatus('Click a new center.');
+    if (!currentImagePointer) {
+      setSaveStatus('Move over the image before pressing c.');
+      return;
+    }
+
+    applyCenterChange(currentImagePointer);
+    setSaveStatus('Center moved to pointer.');
   }
 
   function cancelCurrentEdit() {
