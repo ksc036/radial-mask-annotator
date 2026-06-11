@@ -15,7 +15,7 @@ import {
   type SavedAnnotation,
 } from './algorithm/polygonEditing';
 import { findRadialBoundary, type BoundaryPoint, type Point } from './algorithm/radialBoundary';
-import { decodeTiffFileToImage, isTiffFile } from './algorithm/tiffImage';
+import { decodeTiffFileToImage, isTiffFile, uploadTiffFileToServer } from './algorithm/tiffImage';
 import { createFeretMeasurementsXlsx, createMeasurementWorkbookFilename } from './algorithm/xlsxExport';
 import ImageCanvas from './components/ImageCanvas';
 
@@ -218,7 +218,8 @@ export default function App() {
     setSaveStatus('Loading image...');
 
     try {
-      const loadedImage = await loadImage(file);
+      const uploadedTiff = isTiffFile(file) ? await uploadTiffFileToServer(file) : null;
+      const loadedImage = uploadedTiff?.image ?? (await loadImage(file));
       const prepared = await prepareUploadedImage(loadedImage);
       const imageData = readImageData(prepared.image);
       const gray = rgbToGrayscale(imageData.data, prepared.image.naturalWidth, prepared.image.naturalHeight);
@@ -229,7 +230,7 @@ export default function App() {
 
       setImage(prepared.image);
       setImageFileName(file.name);
-      setDatasetFolderName(null);
+      setDatasetFolderName(uploadedTiff?.folderName ?? null);
       setGrayscale(gray);
       setCenter(null);
       setEditedRadii({});
@@ -244,16 +245,22 @@ export default function App() {
       setSavedAnnotations([]);
       setMaxRadius(defaultMaxRadius);
 
-      try {
-        const folderName = await uploadWorkingImage(file.name, prepared.image);
-        setDatasetFolderName(folderName);
+      if (uploadedTiff) {
         nextSaveStatus = nextSaveStatus
-          ? `${nextSaveStatus} Image saved to ${folderName}.`
-          : `Image saved to ${folderName}.`;
-      } catch {
-        nextSaveStatus = nextSaveStatus
-          ? `${nextSaveStatus} Server image save failed.`
-          : 'Server image save failed.';
+          ? `${nextSaveStatus} Image saved to ${uploadedTiff.folderName}.`
+          : `Image saved to ${uploadedTiff.folderName}.`;
+      } else {
+        try {
+          const folderName = await uploadWorkingImage(file.name, prepared.image);
+          setDatasetFolderName(folderName);
+          nextSaveStatus = nextSaveStatus
+            ? `${nextSaveStatus} Image saved to ${folderName}.`
+            : `Image saved to ${folderName}.`;
+        } catch {
+          nextSaveStatus = nextSaveStatus
+            ? `${nextSaveStatus} Server image save failed.`
+            : 'Server image save failed.';
+        }
       }
 
       setSaveStatus(nextSaveStatus);

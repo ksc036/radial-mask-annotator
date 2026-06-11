@@ -255,6 +255,39 @@ describe('App', () => {
     expect(screen.getByText(/Image saved to 2026-06-11_17-30-22_nucleus/i)).toBeInTheDocument();
   });
 
+  it('uploads TIFF files as original files and uses the server preview image', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        folderName: '2026-06-11_17-30-22_nucleus',
+        imageDataUrl: 'data:image/png;base64,cHJldmlldw==',
+      }),
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    vi.spyOn(HTMLCanvasElement.prototype, 'toDataURL').mockReturnValue('data:image/png;base64,canvas');
+
+    render(<App />);
+
+    fireEvent.change(screen.getByLabelText(/upload image/i), {
+      target: { files: [new File(['tiff'], 'nucleus.tif', { type: 'image/tiff' })] },
+    });
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith(
+        '/api/upload-image-file',
+        expect.objectContaining({
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/octet-stream',
+            'X-Filename': 'nucleus.tif',
+          },
+        }),
+      );
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(screen.getByText(/Image saved to 2026-06-11_17-30-22_nucleus/i)).toBeInTheDocument();
+  });
+
   it('opens the file picker when the empty canvas requests upload', () => {
     const inputClick = vi.spyOn(HTMLInputElement.prototype, 'click').mockImplementation(() => undefined);
 

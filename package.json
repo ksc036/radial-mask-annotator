@@ -15,6 +15,7 @@
     "lucide-react": "latest",
     "react": "latest",
     "react-dom": "latest",
+    "sharp": "^0.35.0",
     "typescript": "latest",
     "utif": "^3.1.0",
     "vite": "latest"

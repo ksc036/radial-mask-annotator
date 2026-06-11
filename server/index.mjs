@@ -3,7 +3,8 @@ import { stat } from 'node:fs/promises';
 import { createServer } from 'node:http';
 import { extname, join, normalize, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { saveDatasetImage, saveDatasetMasks } from './datasetStorage.mjs';
+import { saveDatasetImage, saveDatasetImageFile, saveDatasetMasks } from './datasetStorage.mjs';
+import { convertTiffBufferToPngDataUrl } from './tiffConversion.mjs';
 
 const __dirname = fileURLToPath(new URL('.', import.meta.url));
 const rootDir = resolve(__dirname, '..');
@@ -23,6 +24,29 @@ const server = createServer(async (request, response) => {
       const payload = JSON.parse(await readRequestBody(request));
       const result = await saveDatasetImage(payload, { rootDir: dataDir });
       sendJson(response, 200, { folderName: result.folderName, path: result.path });
+      return;
+    }
+
+    if (request.method === 'POST' && request.url === '/api/upload-image-file') {
+      const imageBuffer = await readRequestBuffer(request);
+      const imageFileName = request.headers['x-filename'] || 'image';
+      const result = await saveDatasetImageFile(
+        { imageFileName: String(imageFileName), imageBuffer },
+        { rootDir: dataDir },
+      );
+      const payload = { folderName: result.folderName, path: result.path };
+
+      if (isTiffFilename(String(imageFileName))) {
+        payload.imageDataUrl = await convertTiffBufferToPngDataUrl(imageBuffer);
+      }
+
+      sendJson(response, 200, payload);
+      return;
+    }
+
+    if (request.method === 'POST' && request.url === '/api/convert-tiff') {
+      const imageBuffer = await readRequestBuffer(request);
+      sendJson(response, 200, { imageDataUrl: await convertTiffBufferToPngDataUrl(imageBuffer) });
       return;
     }
 
@@ -84,6 +108,10 @@ async function fileExists(filePath) {
 }
 
 function readRequestBody(request) {
+  return readRequestBuffer(request).then((buffer) => buffer.toString('utf8'));
+}
+
+function readRequestBuffer(request) {
   return new Promise((resolveBody, rejectBody) => {
     const chunks = [];
     let size = 0;
@@ -97,7 +125,7 @@ function readRequestBody(request) {
       }
       chunks.push(chunk);
     });
-    request.on('end', () => resolveBody(Buffer.concat(chunks).toString('utf8')));
+    request.on('end', () => resolveBody(Buffer.concat(chunks)));
     request.on('error', rejectBody);
   });
 }
@@ -124,4 +152,8 @@ function contentType(filePath) {
     default:
       return 'application/octet-stream';
   }
+}
+
+function isTiffFilename(fileName) {
+  return /\.(tif|tiff)$/i.test(fileName);
 }

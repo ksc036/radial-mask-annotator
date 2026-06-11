@@ -25,6 +25,30 @@ export async function saveDatasetImage(payload, { rootDir = process.env.DATA_DIR
   };
 }
 
+export async function saveDatasetImageFile(payload, { rootDir = process.env.DATA_DIR || 'data', now = new Date() } = {}) {
+  validateImageFilePayload(payload);
+
+  const baseName = imageBaseName(payload.imageFileName);
+  const timestamp = formatTimestamp(now);
+  const folderName = `${timestamp}_${baseName}`;
+  const datasetDir = join(rootDir, folderName);
+  const imageDir = join(datasetDir, 'image');
+  const masksDir = join(datasetDir, 'masks');
+  const imagePath = join(imageDir, originalImageFilename(payload.imageFileName));
+
+  await mkdir(imageDir, { recursive: true });
+  await mkdir(masksDir, { recursive: true });
+  await writeFile(imagePath, payload.imageBuffer);
+
+  return {
+    folderName,
+    path: datasetDir,
+    files: {
+      image: imagePath,
+    },
+  };
+}
+
 export async function saveDatasetMasks(payload, { rootDir = process.env.DATA_DIR || 'data' } = {}) {
   validateMasksPayload(payload);
 
@@ -56,6 +80,18 @@ function validateImagePayload(payload) {
   }
 }
 
+function validateImageFilePayload(payload) {
+  if (!payload || typeof payload !== 'object') {
+    throw new Error('Image file upload payload is required.');
+  }
+  if (typeof payload.imageFileName !== 'string' || payload.imageFileName.trim() === '') {
+    throw new Error('imageFileName is required.');
+  }
+  if (!Buffer.isBuffer(payload.imageBuffer) || payload.imageBuffer.length === 0) {
+    throw new Error('imageBuffer is required.');
+  }
+}
+
 function validateMasksPayload(payload) {
   if (!payload || typeof payload !== 'object') {
     throw new Error('Mask export payload is required.');
@@ -81,6 +117,10 @@ function imageBaseName(fileName) {
 function ensurePngFilename(fileName) {
   const baseName = sanitizeFilename(fileName.replace(/\.[^.]+$/, '') || 'mask');
   return `${baseName}.png`;
+}
+
+function originalImageFilename(fileName) {
+  return sanitizeFilename(fileName.trim()) || 'image';
 }
 
 function safeFolderName(folderName) {

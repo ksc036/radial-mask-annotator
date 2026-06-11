@@ -2,9 +2,11 @@ declare module 'utif' {
   export interface TiffIfd {
     width?: number;
     height?: number;
-    data?: unknown;
+    data?: Uint8Array;
+    t262?: number[];
     t256?: number[];
     t257?: number[];
+    t258?: number[];
   }
 
   export function decode(buffer: ArrayBuffer): TiffIfd[];
