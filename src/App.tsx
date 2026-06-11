@@ -1,4 +1,4 @@
-import { Download, Eye, EyeOff, Pencil, Upload } from 'lucide-react';
+import { Download, Eye, EyeOff, Pencil, Save, Upload } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { rgbToGrayscale } from './algorithm/grayscale';
 import { getWorkingImageSize, wasImageResized } from './algorithm/imageProcessing';
@@ -325,7 +325,11 @@ export default function App() {
           />
 
           <div className="button-row">
-            <button className="secondary-action" type="button" onClick={toggleHoveredExclusion} disabled={hoveredPointIndex === null}>
+            <button className="secondary-action" type="button" onClick={saveCurrentAnnotation}>
+              <Save size={16} aria-hidden="true" />
+              Save annotation
+            </button>
+            <button className="secondary-action" type="button" onClick={toggleHoveredExclusion}>
               <EyeOff size={16} aria-hidden="true" />
               Remove hovered point
             </button>

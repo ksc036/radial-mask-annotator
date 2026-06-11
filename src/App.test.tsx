@@ -70,6 +70,7 @@ describe('App', () => {
     expect(screen.getByLabelText(/step size/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/outlier threshold/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/point opacity/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /save annotation/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /remove hovered point/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /export csv/i })).toBeInTheDocument();
   });
@@ -114,6 +115,25 @@ describe('App', () => {
     });
     expect(within(screen.getByLabelText(/saved annotations/i)).getByText(/Annotation 1/i)).toBeInTheDocument();
     expect(within(screen.getByLabelText(/saved annotations/i)).getByText(/Area:/i)).toBeInTheDocument();
+  });
+
+  it('saves the current annotation with the save button', async () => {
+    render(<App />);
+
+    fireEvent.change(screen.getByLabelText(/upload image/i), {
+      target: { files: [new File(['fake'], 'nucleus.png', { type: 'image/png' })] },
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText('Click the center of one round nucleus.')).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Mock canvas click' }));
+    fireEvent.click(screen.getByRole('button', { name: /save annotation/i }));
+
+    await waitFor(() => {
+      expect(screen.getByText(/Saved annotation 1/i)).toBeInTheDocument();
+    });
   });
 
   it('keeps the current editing overlay after saving with s', async () => {
@@ -218,6 +238,18 @@ describe('App', () => {
     await waitFor(() => {
       expect(screen.getByText('Restored point 1.')).toBeInTheDocument();
     });
+  });
+
+  it('keeps the remove button clickable and explains when no point is hovered', () => {
+    render(<App />);
+
+    const removeButton = screen.getByRole('button', { name: /remove hovered point/i });
+
+    expect(removeButton).toBeEnabled();
+
+    fireEvent.click(removeButton);
+
+    expect(screen.getByText(/Hover a radial point before pressing r/i)).toBeInTheDocument();
   });
 
   it('shows why s did not save when no valid polygon exists', () => {
