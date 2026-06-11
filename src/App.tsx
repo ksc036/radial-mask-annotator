@@ -18,6 +18,11 @@ import ImageCanvas from './components/ImageCanvas';
 const RAY_COUNTS = [16, 32, 64, 128];
 const RADIUS_SNAP_THRESHOLD = 8;
 
+interface RemovalRange {
+  start: Point;
+  current: Point;
+}
+
 export default function App() {
   const [image, setImage] = useState<HTMLImageElement | null>(null);
   const [grayscale, setGrayscale] = useState<Uint8ClampedArray | null>(null);
@@ -32,6 +37,8 @@ export default function App() {
   const [manualExcludedIndices, setManualExcludedIndices] = useState<Set<number>>(() => new Set());
   const [hoveredPointIndex, setHoveredPointIndex] = useState<number | null>(null);
   const [selectedPointIndex, setSelectedPointIndex] = useState<number | null>(null);
+  const [currentImagePointer, setCurrentImagePointer] = useState<Point | null>(null);
+  const [removalRange, setRemovalRange] = useState<RemovalRange | null>(null);
   const [savedAnnotations, setSavedAnnotations] = useState<SavedAnnotation[]>([]);
   const [saveStatus, setSaveStatus] = useState('');
 
@@ -86,7 +93,9 @@ export default function App() {
       }
       if (isShortcutKey(event, 'KeyR', 'r')) {
         event.preventDefault();
-        toggleHoveredExclusion();
+        if (!event.repeat) {
+          startPointRemoval();
+        }
       }
       if (isShortcutKey(event, 'BracketLeft', '[')) {
         event.preventDefault();
@@ -98,8 +107,19 @@ export default function App() {
       }
     }
 
+    function handleKeyUp(event: KeyboardEvent) {
+      if (isShortcutKey(event, 'KeyR', 'r')) {
+        event.preventDefault();
+        finishRemovalRange();
+      }
+    }
+
     window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
+    window.addEventListener('keyup', handleKeyUp);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('keyup', handleKeyUp);
+    };
   });
 
   async function handleUpload(event: React.ChangeEvent<HTMLInputElement>) {
@@ -125,6 +145,9 @@ export default function App() {
       setManualExcludedIndices(new Set());
       setHoveredPointIndex(null);
       setSelectedPointIndex(null);
+      setCurrentImagePointer(null);
+      setRemovalRange(null);
+      setSavedAnnotations([]);
       setSaveStatus(
         prepared.resized
           ? `Large image resized to ${prepared.image.naturalWidth} x ${prepared.image.naturalHeight} for stable editing.`
@@ -145,6 +168,7 @@ export default function App() {
     setManualExcludedIndices(new Set());
     setHoveredPointIndex(null);
     setSelectedPointIndex(null);
+    setRemovalRange(null);
     setSaveStatus('');
   }
 
@@ -159,7 +183,7 @@ export default function App() {
 
   function nudgeSelectedPoint(delta: number) {
     if (!center || selectedPointIndex === null || !polygon[selectedPointIndex]) {
-      setSaveStatus('Select a radial point before using + or -.');
+      setSaveStatus('Select a radial point before using [ or ].');
       return;
     }
 
@@ -177,6 +201,62 @@ export default function App() {
     }
 
     togglePointExclusion(hoveredPointIndex);
+  }
+
+  function startPointRemoval() {
+    if (hoveredPointIndex !== null) {
+      togglePointExclusion(hoveredPointIndex);
+      return;
+    }
+
+    if (!center || polygon.length === 0) {
+      setSaveStatus('Select a center before removing points.');
+      return;
+    }
+
+    if (!currentImagePointer) {
+      setSaveStatus('Move over the image before holding r.');
+      return;
+    }
+
+    setRemovalRange({ start: currentImagePointer, current: currentImagePointer });
+    setSaveStatus('Drag the removal range, then release r.');
+  }
+
+  function finishRemovalRange() {
+    if (!removalRange) {
+      return;
+    }
+
+    const targetIndices = getPointIndicesInRange(polygon, removalRange).filter((index) => !manualExcludedIndices.has(index));
+    setRemovalRange(null);
+
+    if (targetIndices.length === 0) {
+      setSaveStatus('No radial points in removal range.');
+      return;
+    }
+
+    setManualExcludedIndices((current) => {
+      const next = new Set(current);
+      targetIndices.forEach((index) => next.add(index));
+      return next;
+    });
+
+    if (selectedPointIndex !== null && targetIndices.includes(selectedPointIndex)) {
+      setSelectedPointIndex(null);
+    }
+    if (hoveredPointIndex !== null && targetIndices.includes(hoveredPointIndex)) {
+      setHoveredPointIndex(null);
+    }
+
+    setSaveStatus(`Removed ${targetIndices.length} points.`);
+  }
+
+  function handlePointerImageMove(point: Point | null) {
+    setCurrentImagePointer(point);
+    if (point) {
+      setRemovalRange((current) => (current ? { ...current, current: point } : current));
+    }
   }
 
   function togglePointExclusion(index: number) {
@@ -286,12 +366,14 @@ export default function App() {
             pointOpacity={pointOpacity}
             hoveredPointIndex={hoveredPointIndex}
             savedOverlays={visibleSavedOverlays}
+            removalRange={removalRange}
             onCenterChange={handleCenterChange}
             onPointHover={setHoveredPointIndex}
             onPointSelect={setSelectedPointIndex}
             onPointRadiusChange={handlePointRadiusChange}
             onPointToggleExcluded={togglePointExclusion}
             onSavedOverlayEdit={editSavedAnnotationById}
+            onPointerImageMove={handlePointerImageMove}
           />
         </div>
 
@@ -467,6 +549,17 @@ function SliderField({
         onChange={(event) => onChange(Number(event.target.value))}
       />
     </div>
+  );
+}
+
+function getPointIndicesInRange(points: BoundaryPoint[], range: RemovalRange) {
+  const minX = Math.min(range.start.x, range.current.x);
+  const maxX = Math.max(range.start.x, range.current.x);
+  const minY = Math.min(range.start.y, range.current.y);
+  const maxY = Math.max(range.start.y, range.current.y);
+
+  return points.flatMap((point, index) =>
+    point.x >= minX && point.x <= maxX && point.y >= minY && point.y <= maxY ? [index] : [],
   );
 }
 

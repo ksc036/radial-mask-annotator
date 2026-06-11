@@ -29,6 +29,7 @@ describe('ImageCanvas', () => {
         onPointRadiusChange={onPointRadiusChange}
         onPointToggleExcluded={onPointToggleExcluded}
         onSavedOverlayEdit={vi.fn()}
+        onPointerImageMove={vi.fn()}
       />,
     );
 
@@ -84,6 +85,7 @@ describe('ImageCanvas', () => {
         onPointRadiusChange={vi.fn()}
         onPointToggleExcluded={vi.fn()}
         onSavedOverlayEdit={onSavedOverlayEdit}
+        onPointerImageMove={vi.fn()}
       />,
     );
 

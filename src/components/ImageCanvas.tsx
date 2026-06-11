@@ -12,17 +12,24 @@ interface ImageCanvasProps {
   manualExcludedIndices: Set<number>;
   pointOpacity: number;
   hoveredPointIndex: number | null;
+  removalRange?: RemovalRange | null;
   onCenterChange: (point: Point) => void;
   onPointHover: (index: number | null) => void;
   onPointSelect: (index: number | null) => void;
   onPointRadiusChange: (index: number, radius: number) => void;
   onPointToggleExcluded: (index: number) => void;
   onSavedOverlayEdit: (id: number) => void;
+  onPointerImageMove: (point: Point | null) => void;
 }
 
 interface SavedPolygonOverlay {
   id: number;
   effectivePoints: EffectivePolygonPoint[];
+}
+
+interface RemovalRange {
+  start: Point;
+  current: Point;
 }
 
 export default function ImageCanvas({
@@ -35,12 +42,14 @@ export default function ImageCanvas({
   manualExcludedIndices,
   pointOpacity,
   hoveredPointIndex,
+  removalRange = null,
   onCenterChange,
   onPointHover,
   onPointSelect,
   onPointRadiusChange,
   onPointToggleExcluded,
   onSavedOverlayEdit,
+  onPointerImageMove,
 }: ImageCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const [draggedPointIndex, setDraggedPointIndex] = useState<number | null>(null);
@@ -69,7 +78,19 @@ export default function ImageCanvas({
     context.drawImage(image, layout.x, layout.y, layout.width, layout.height);
     drawSavedOverlays(context, layout, savedOverlays);
     drawOverlay(context, layout, center, points, effectivePoints, autoExcludedIndices, manualExcludedIndices, pointOpacity, hoveredPointIndex);
-  }, [autoExcludedIndices, center, effectivePoints, hoveredPointIndex, image, manualExcludedIndices, pointOpacity, points, savedOverlays]);
+    drawRemovalRange(context, layout, removalRange);
+  }, [
+    autoExcludedIndices,
+    center,
+    effectivePoints,
+    hoveredPointIndex,
+    image,
+    manualExcludedIndices,
+    pointOpacity,
+    points,
+    removalRange,
+    savedOverlays,
+  ]);
 
   function handlePointerDown(event: React.PointerEvent<HTMLCanvasElement>) {
     const canvas = canvasRef.current;
@@ -81,7 +102,10 @@ export default function ImageCanvas({
     const layout = getCanvasImageLayout(canvas, image);
     const rect = canvas.getBoundingClientRect();
     const canvasPoint = getCanvasPointerPoint(event, canvas, rect);
+    const imagePoint = getImagePointWithinLayout(canvasPoint, layout);
     const nearestPointIndex = findNearestPointIndex(canvasPoint, layout, points);
+
+    onPointerImageMove(imagePoint);
 
     if (nearestPointIndex !== null) {
       if (autoExcludedIndices.has(nearestPointIndex) || manualExcludedIndices.has(nearestPointIndex)) {
@@ -123,15 +147,21 @@ export default function ImageCanvas({
 
     if (!canvas || !image || !center) {
       onPointHover(null);
+      onPointerImageMove(null);
       return;
     }
 
     const rect = canvas.getBoundingClientRect();
     const layout = getCanvasImageLayout(canvas, image);
     const canvasPoint = getCanvasPointerPoint(event, canvas, rect);
+    const imagePoint = getImagePointWithinLayout(canvasPoint, layout);
+
+    onPointerImageMove(imagePoint);
 
     if (draggedPointIndex !== null) {
-      const imagePoint = canvasToImagePoint(canvasPoint, layout);
+      if (!imagePoint) {
+        return;
+      }
       const draggedPoint = points[draggedPointIndex];
       const projectedRadius =
         (imagePoint.x - center.x) * Math.cos(draggedPoint.angle) + (imagePoint.y - center.y) * Math.sin(draggedPoint.angle);
@@ -157,6 +187,7 @@ export default function ImageCanvas({
       onPointerLeave={() => {
         setDraggedPointIndex(null);
         onPointHover(null);
+        onPointerImageMove(null);
       }}
       onPointerUp={handlePointerUp}
       aria-label="Image annotation canvas"
@@ -257,6 +288,31 @@ function drawSavedOverlays(context: CanvasRenderingContext2D, layout: CanvasImag
   });
 }
 
+function drawRemovalRange(context: CanvasRenderingContext2D, layout: CanvasImageLayout, removalRange: RemovalRange | null) {
+  if (!removalRange) {
+    return;
+  }
+
+  const start = imageToCanvasPoint(removalRange.start, layout);
+  const current = imageToCanvasPoint(removalRange.current, layout);
+  const x = Math.min(start.x, current.x);
+  const y = Math.min(start.y, current.y);
+  const width = Math.abs(current.x - start.x);
+  const height = Math.abs(current.y - start.y);
+
+  context.beginPath();
+  context.moveTo(x, y);
+  context.lineTo(x + width, y);
+  context.lineTo(x + width, y + height);
+  context.lineTo(x, y + height);
+  context.closePath();
+  context.fillStyle = 'rgb(212 63 54 / 0.12)';
+  context.strokeStyle = '#d43f36';
+  context.lineWidth = 2;
+  context.fill();
+  context.stroke();
+}
+
 function getCanvasPointerPoint(
   event: React.PointerEvent<HTMLCanvasElement>,
   canvas: HTMLCanvasElement,
@@ -266,6 +322,19 @@ function getCanvasPointerPoint(
     x: ((event.clientX - rect.left) / rect.width) * canvas.width,
     y: ((event.clientY - rect.top) / rect.height) * canvas.height,
   };
+}
+
+function getImagePointWithinLayout(point: Point, layout: CanvasImageLayout) {
+  if (
+    point.x < layout.x ||
+    point.x > layout.x + layout.width ||
+    point.y < layout.y ||
+    point.y > layout.y + layout.height
+  ) {
+    return null;
+  }
+
+  return canvasToImagePoint(point, layout);
 }
 
 interface CanvasImageLayout {

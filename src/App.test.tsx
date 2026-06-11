@@ -11,19 +11,28 @@ vi.mock('./components/ImageCanvas', () => ({
     onPointHover,
     onPointRadiusChange,
     onPointSelect,
+    onPointerImageMove,
+    removalRange,
   }: {
     center?: { x: number; y: number } | null;
     points?: Array<unknown>;
     savedOverlays?: Array<unknown>;
+    removalRange?: { start: { x: number; y: number }; current: { x: number; y: number } } | null;
     onCenterChange: (point: { x: number; y: number }) => void;
     onPointHover?: (index: number | null) => void;
     onPointRadiusChange?: (index: number, radius: number) => void;
     onPointSelect?: (index: number | null) => void;
+    onPointerImageMove?: (point: { x: number; y: number } | null) => void;
   }) => (
     <div>
       <span data-testid="mock-center">{center ? `${center.x},${center.y}` : 'none'}</span>
       <span data-testid="mock-current-points">{points?.length ?? 0}</span>
       <span data-testid="mock-saved-overlays">{savedOverlays.length}</span>
+      <span data-testid="mock-removal-range">
+        {removalRange
+          ? `${removalRange.start.x},${removalRange.start.y}-${removalRange.current.x},${removalRange.current.y}`
+          : 'none'}
+      </span>
       <button type="button" onClick={() => onCenterChange({ x: 4, y: 4 })}>
         Mock canvas click
       </button>
@@ -35,6 +44,12 @@ vi.mock('./components/ImageCanvas', () => ({
       </button>
       <button type="button" onClick={() => onPointSelect?.(0)}>
         Mock point select
+      </button>
+      <button type="button" onClick={() => onPointerImageMove?.({ x: 0, y: 0 })}>
+        Mock pointer at top left
+      </button>
+      <button type="button" onClick={() => onPointerImageMove?.({ x: 10, y: 10 })}>
+        Mock pointer at bottom right
       </button>
     </div>
   ),
@@ -214,6 +229,37 @@ describe('App', () => {
     expect(screen.getByTestId('mock-saved-overlays')).toHaveTextContent('1');
   });
 
+  it('clears saved annotations when a new image is uploaded', async () => {
+    render(<App />);
+
+    const uploadInput = screen.getByLabelText(/upload image/i);
+    fireEvent.change(uploadInput, {
+      target: { files: [new File(['fake'], 'first.png', { type: 'image/png' })] },
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText('Click the center of one round nucleus.')).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Mock canvas click' }));
+    fireEvent.keyDown(window, { key: 's' });
+
+    await waitFor(() => {
+      expect(within(screen.getByLabelText(/saved annotations/i)).getByText(/Annotation 1/i)).toBeInTheDocument();
+    });
+    expect(screen.getByTestId('mock-saved-overlays')).toHaveTextContent('1');
+
+    fireEvent.change(uploadInput, {
+      target: { files: [new File(['fake'], 'second.png', { type: 'image/png' })] },
+    });
+
+    await waitFor(() => {
+      expect(within(screen.getByLabelText(/saved annotations/i)).getByText(/No saved annotations/i)).toBeInTheDocument();
+    });
+    expect(screen.getByTestId('mock-saved-overlays')).toHaveTextContent('0');
+    expect(screen.getByRole('button', { name: /export csv/i })).toBeDisabled();
+  });
+
   it('restores a saved annotation into the editor when edit is clicked', async () => {
     render(<App />);
 
@@ -283,6 +329,34 @@ describe('App', () => {
     await waitFor(() => {
       expect(screen.getByText('Removed point 1.')).toBeInTheDocument();
     });
+  });
+
+  it('removes all radial points inside an r-key drag range', async () => {
+    render(<App />);
+
+    fireEvent.change(screen.getByLabelText(/upload image/i), {
+      target: { files: [new File(['fake'], 'nucleus.png', { type: 'image/png' })] },
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText('Click the center of one round nucleus.')).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Mock canvas click' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Mock pointer at top left' }));
+    fireEvent.keyDown(window, { key: 'r', code: 'KeyR' });
+
+    await waitFor(() => {
+      expect(screen.getByTestId('mock-removal-range')).toHaveTextContent('0,0-0,0');
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Mock pointer at bottom right' }));
+    fireEvent.keyUp(window, { key: 'r', code: 'KeyR' });
+
+    await waitFor(() => {
+      expect(screen.getByText('Removed 32 points.')).toBeInTheDocument();
+    });
+    expect(screen.getByTestId('mock-removal-range')).toHaveTextContent('none');
   });
 
   it('keeps the remove button clickable and explains when no point is hovered', () => {
