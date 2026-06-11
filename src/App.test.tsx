@@ -6,6 +6,7 @@ vi.mock('./components/ImageCanvas', () => ({
   default: ({
     center,
     points,
+    effectivePoints,
     savedOverlays = [],
     pointOpacity,
     lineOpacity,
@@ -23,7 +24,8 @@ vi.mock('./components/ImageCanvas', () => ({
     removalRange,
   }: {
     center?: { x: number; y: number } | null;
-    points?: Array<unknown>;
+    points?: Array<{ x: number; y: number }>;
+    effectivePoints?: Array<{ x: number; y: number }>;
     savedOverlays?: Array<{ label?: string; color?: string }>;
     pointOpacity?: number;
     lineOpacity?: number;
@@ -43,6 +45,9 @@ vi.mock('./components/ImageCanvas', () => ({
     <div>
       <span data-testid="mock-center">{center ? `${center.x},${center.y}` : 'none'}</span>
       <span data-testid="mock-current-points">{points?.length ?? 0}</span>
+      <span data-testid="mock-effective-points">{effectivePoints?.length ?? 0}</span>
+      <span data-testid="mock-point-3">{points?.[2] ? `${points[2].x},${points[2].y}` : 'none'}</span>
+      <span data-testid="mock-point-5">{points?.[4] ? `${points[4].x},${points[4].y}` : 'none'}</span>
       <span data-testid="mock-saved-overlays">{savedOverlays.length}</span>
       <span data-testid="mock-saved-overlay-details">
         {savedOverlays.map((overlay) => `${overlay.label}:${overlay.color}`).join('|')}
@@ -124,11 +129,13 @@ describe('App', () => {
     expect(screen.getByText(/Shortcuts/i)).toBeInTheDocument();
     expect(screen.getByText(/S: save current annotation/i)).toBeInTheDocument();
     expect(screen.getByText(/V: hold to preview original image/i)).toBeInTheDocument();
+    expect(screen.getByText(/D: move nearest radial point to pointer/i)).toBeInTheDocument();
     expect(screen.getByText(/Click to upload an image or drag & drop onto the canvas/i)).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: /detection/i })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: /view/i })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: /saved/i })).toBeInTheDocument();
     expect(screen.getByLabelText(/ray count/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/ray count/i)).toHaveValue('16');
     expect(screen.getByLabelText(/gradient threshold/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/max radius/i)).toBeInTheDocument();
     expect(screen.queryByLabelText(/step size/i)).not.toBeInTheDocument();
@@ -708,7 +715,7 @@ describe('App', () => {
     fireEvent.keyUp(window, { key: 'r', code: 'KeyR' });
 
     await waitFor(() => {
-      expect(screen.getByText('Removed 32 points.')).toBeInTheDocument();
+      expect(screen.getByText('Removed 16 points.')).toBeInTheDocument();
     });
     expect(screen.getByTestId('mock-removal-range')).toHaveTextContent('none');
   });
@@ -741,6 +748,41 @@ describe('App', () => {
     expect(screen.queryByRole('button', { name: /increase selected point radius/i })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /decrease selected point radius/i })).not.toBeInTheDocument();
     expect(screen.queryByText(/Use \[ \/ \] to nudge/i)).not.toBeInTheDocument();
+  });
+
+  it('moves the nearest directional radial point to the pointer with d', async () => {
+    render(<App />);
+
+    fireEvent.change(screen.getByLabelText(/upload image/i), {
+      target: { files: [new File(['fake'], 'nucleus.png', { type: 'image/png' })] },
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText('Click the center of one round nucleus.')).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Mock canvas click' }));
+    await waitFor(() => {
+      expect(screen.getByTestId('mock-current-points')).not.toHaveTextContent('0');
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Mock pointer at top left' }));
+    fireEvent.keyDown(window, { key: 'r', code: 'KeyR' });
+    fireEvent.click(screen.getByRole('button', { name: 'Mock pointer at bottom right' }));
+    fireEvent.keyUp(window, { key: 'r', code: 'KeyR' });
+
+    await waitFor(() => {
+      expect(screen.getByText('Removed 16 points.')).toBeInTheDocument();
+    });
+    expect(screen.getByTestId('mock-effective-points')).toHaveTextContent('0');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Mock pointer at bottom right' }));
+    fireEvent.keyDown(window, { key: 'd', code: 'KeyD' });
+
+    await waitFor(() => {
+      expect(screen.getByText(/Moved point 3 to pointer/i)).toBeInTheDocument();
+    });
+    expect(screen.getByTestId('mock-point-3')).toHaveTextContent('10,10');
+    expect(screen.getByTestId('mock-effective-points')).toHaveTextContent('1');
   });
 
   it('shows why s did not save when no valid polygon exists', () => {

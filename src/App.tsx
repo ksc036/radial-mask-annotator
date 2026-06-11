@@ -9,6 +9,7 @@ import {
   distanceFromCenter,
   getEffectivePolygonPoints,
   markOutlierPoints,
+  moveNearestDirectionalPointToTarget,
   snapRadiusToNeighborAverage,
   updatePointRadius,
   type SavedAnnotation,
@@ -34,7 +35,7 @@ export default function App() {
   const [datasetFolderName, setDatasetFolderName] = useState<string | null>(null);
   const [grayscale, setGrayscale] = useState<Uint8ClampedArray | null>(null);
   const [center, setCenter] = useState<Point | null>(null);
-  const [rayCount, setRayCount] = useState(32);
+  const [rayCount, setRayCount] = useState(16);
   const [threshold, setThreshold] = useState(24);
   const [maxRadius, setMaxRadius] = useState(120);
   const [outlierThreshold, setOutlierThreshold] = useState(35);
@@ -46,6 +47,7 @@ export default function App() {
   const [lineWidth, setLineWidth] = useState(1.5);
   const [showOriginalOnly, setShowOriginalOnly] = useState(false);
   const [editedRadii, setEditedRadii] = useState<Record<number, number>>({});
+  const [editedPointPositions, setEditedPointPositions] = useState<Record<number, Point>>({});
   const [manualExcludedIndices, setManualExcludedIndices] = useState<Set<number>>(() => new Set());
   const [hoveredPointIndex, setHoveredPointIndex] = useState<number | null>(null);
   const [selectedPointIndex, setSelectedPointIndex] = useState<number | null>(null);
@@ -72,12 +74,19 @@ export default function App() {
     }).points;
   }, [center, grayscale, image, maxRadius, rayCount, threshold]);
 
-  const polygon = useMemo(
+  const radiusEditedPolygon = useMemo(
     () =>
       rawPolygon.map((point, index) =>
         editedRadii[index] === undefined || !center ? point : updatePointRadius(point, center, editedRadii[index]),
       ),
     [center, editedRadii, rawPolygon],
+  );
+  const polygon = useMemo(
+    () =>
+      radiusEditedPolygon.map((point, index) =>
+        editedPointPositions[index] === undefined ? point : { ...point, ...editedPointPositions[index] },
+      ),
+    [editedPointPositions, radiusEditedPolygon],
   );
 
   const autoExcludedIndices = useMemo(
@@ -125,6 +134,10 @@ export default function App() {
         event.preventDefault();
         nudgeSelectedPoint(1);
       }
+      if (isShortcutKey(event, 'KeyD', 'd')) {
+        event.preventDefault();
+        moveNearestPointToPointerDirection();
+      }
       if (isShortcutKey(event, 'KeyC', 'c')) {
         event.preventDefault();
         moveCenterToPointer();
@@ -171,11 +184,12 @@ export default function App() {
       ),
     );
   }, [
-      activeEditingAnnotationId,
+    activeEditingAnnotationId,
     areaPixels,
-      center,
-      editedRadii,
-      effectivePolygon,
+    center,
+    editedRadii,
+    editedPointPositions,
+    effectivePolygon,
     feretPixels,
     excludedCount,
     manualExcludedIndices,
@@ -218,6 +232,7 @@ export default function App() {
       setGrayscale(gray);
       setCenter(null);
       setEditedRadii({});
+      setEditedPointPositions({});
       setManualExcludedIndices(new Set());
       setHoveredPointIndex(null);
       setSelectedPointIndex(null);
@@ -247,6 +262,9 @@ export default function App() {
       setDatasetFolderName(null);
       setGrayscale(null);
       setCenter(null);
+      setEditedRadii({});
+      setEditedPointPositions({});
+      setManualExcludedIndices(new Set());
       setSaveStatus('Image failed to load. Try a smaller image or a different image format.');
     }
   }
@@ -286,6 +304,7 @@ export default function App() {
   function applyCenterChange(nextCenter: Point) {
     setCenter(nextCenter);
     setEditedRadii({});
+    setEditedPointPositions({});
     setManualExcludedIndices(new Set());
     setHoveredPointIndex(null);
     setSelectedPointIndex(null);
@@ -311,6 +330,7 @@ export default function App() {
   function cancelCurrentEdit() {
     setCenter(null);
     setEditedRadii({});
+    setEditedPointPositions({});
     setManualExcludedIndices(new Set());
     setHoveredPointIndex(null);
     setSelectedPointIndex(null);
@@ -339,6 +359,7 @@ export default function App() {
 
     const snappedRadius = snapRadiusToNeighborAverage(polygon, center, index, radius, RADIUS_SNAP_THRESHOLD);
     setEditedRadii((current) => ({ ...current, [index]: snappedRadius }));
+    removeEditedPointPosition(index);
   }
 
   function nudgeSelectedPoint(delta: number) {
@@ -351,7 +372,53 @@ export default function App() {
     const nextRadius = Math.max(0, currentRadius + delta);
 
     setEditedRadii((current) => ({ ...current, [selectedPointIndex]: nextRadius }));
+    removeEditedPointPosition(selectedPointIndex);
     setSaveStatus(`Moved point ${selectedPointIndex + 1} ${delta > 0 ? 'outward' : 'inward'}.`);
+  }
+
+  function moveNearestPointToPointerDirection() {
+    if (!center || polygon.length === 0) {
+      setSaveStatus('Select a center before using d.');
+      return;
+    }
+
+    if (!currentImagePointer) {
+      setSaveStatus('Move over the desired point before pressing d.');
+      return;
+    }
+
+    const moved = moveNearestDirectionalPointToTarget(polygon, center, currentImagePointer);
+
+    if (!moved) {
+      setSaveStatus('Move over a point away from the center before pressing d.');
+      return;
+    }
+
+    setEditedPointPositions((current) => ({ ...current, [moved.index]: moved.point }));
+    setManualExcludedIndices((current) => {
+      const next = new Set(current);
+      next.delete(moved.index);
+      return next;
+    });
+    setEditedRadii((current) => {
+      const next = { ...current };
+      delete next[moved.index];
+      return next;
+    });
+    setSelectedPointIndex(moved.index);
+    setSaveStatus(`Moved point ${moved.index + 1} to pointer.`);
+  }
+
+  function removeEditedPointPosition(index: number) {
+    setEditedPointPositions((current) => {
+      if (current[index] === undefined) {
+        return current;
+      }
+
+      const next = { ...current };
+      delete next[index];
+      return next;
+    });
   }
 
   function startPointRemoval() {
@@ -458,6 +525,7 @@ export default function App() {
   function clearEditorForNextCenter() {
     setCenter(null);
     setEditedRadii({});
+    setEditedPointPositions({});
     setManualExcludedIndices(new Set());
     setHoveredPointIndex(null);
     setSelectedPointIndex(null);
@@ -480,6 +548,7 @@ export default function App() {
       visible,
       displayPoints: effectivePolygon.map((point) => ({ ...point })),
       editedRadii: { ...editedRadii },
+      editedPointPositions: { ...editedPointPositions },
       manualExcludedIndices: Array.from(manualExcludedIndices),
       rayCount,
       threshold,
@@ -504,6 +573,7 @@ export default function App() {
     setMaxRadius(annotation.maxRadius);
     setOutlierThreshold(annotation.outlierThreshold);
     setEditedRadii({ ...annotation.editedRadii });
+    setEditedPointPositions({ ...annotation.editedPointPositions });
     setManualExcludedIndices(new Set(annotation.manualExcludedIndices));
     setHoveredPointIndex(null);
     setSelectedPointIndex(null);
@@ -608,6 +678,7 @@ export default function App() {
               <li>Esc: cancel current edit</li>
               <li>V: hold to preview original image</li>
               <li>[ / ]: move selected point</li>
+              <li>D: move nearest radial point to pointer</li>
             </ul>
             <p>Click to upload an image or drag & drop onto the canvas.</p>
             <p className="status-text">{getStatusText(Boolean(image), Boolean(center), fallbackCount)}</p>

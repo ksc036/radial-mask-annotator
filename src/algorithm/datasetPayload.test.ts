@@ -97,6 +97,7 @@ function makeAnnotation(points: Array<{ x: number; y: number }>): SavedAnnotatio
       gradient: 0,
     })),
     editedRadii: {},
+    editedPointPositions: {},
     manualExcludedIndices: [],
     rayCount: 32,
     threshold: 24,

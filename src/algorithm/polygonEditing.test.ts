@@ -6,6 +6,7 @@ import {
   formatFeretMeasurementsCsv,
   getEffectivePolygonPoints,
   markOutlierPoints,
+  moveNearestDirectionalPointToTarget,
   snapRadiusToNeighborAverage,
   updatePointRadius,
   type SavedAnnotation,
@@ -86,6 +87,7 @@ describe('polygon editing utilities', () => {
         visible: true,
         displayPoints: [],
         editedRadii: {},
+        editedPointPositions: {},
         manualExcludedIndices: [],
         rayCount: 32,
         threshold: 24,
@@ -102,6 +104,25 @@ describe('polygon editing utilities', () => {
     const points = [point(10, 0, 0), point(14, Math.PI / 2, 1), point(20, Math.PI, 2), point(10, (3 * Math.PI) / 2, 3)];
 
     expect(snapRadiusToNeighborAverage(points, center, 1, 15.5, 3)).toBe(15);
+  });
+
+  it('moves the radial point with the nearest center-to-target direction to the target', () => {
+    const points: BoundaryPoint[] = [
+      { x: 10, y: 0, angle: 0, fallback: false, gradient: 0 },
+      { x: 6, y: 8, angle: Math.atan2(8, 6), fallback: false, gradient: 1 },
+      { x: -7, y: 0, angle: Math.PI, fallback: false, gradient: 2 },
+      { x: 0, y: 5, angle: Math.PI / 2, fallback: false, gradient: 3 },
+    ];
+
+    const moved = moveNearestDirectionalPointToTarget(points, center, { x: 8, y: 9 });
+
+    expect(moved).toEqual({ index: 1, point: { x: 8, y: 9 } });
+  });
+
+  it('does not move an opposite-side point for a center target', () => {
+    const points: BoundaryPoint[] = [{ x: -10, y: 0, angle: Math.PI, fallback: false, gradient: 0 }];
+
+    expect(moveNearestDirectionalPointToTarget(points, center, { x: 10, y: 0 })).toBeNull();
   });
 
   it('keeps a dragged radius free when it is far from the neighbor average', () => {

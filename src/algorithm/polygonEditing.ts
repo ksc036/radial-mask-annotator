@@ -16,6 +16,7 @@ export interface SavedAnnotation {
   visible: boolean;
   displayPoints: EffectivePolygonPoint[];
   editedRadii: Record<number, number>;
+  editedPointPositions: Record<number, Point>;
   manualExcludedIndices: number[];
   rayCount: number;
   threshold: number;
@@ -67,6 +68,50 @@ export function updatePointRadius(point: BoundaryPoint, center: Point, radius: n
     x: center.x + Math.cos(point.angle) * nextRadius,
     y: center.y + Math.sin(point.angle) * nextRadius,
   };
+}
+
+export function moveNearestDirectionalPointToTarget(
+  points: BoundaryPoint[],
+  center: Point,
+  target: Point,
+): { index: number; point: Point } | null {
+  const targetVector = {
+    x: target.x - center.x,
+    y: target.y - center.y,
+  };
+  const targetDistance = Math.hypot(targetVector.x, targetVector.y);
+
+  if (targetDistance === 0) {
+    return null;
+  }
+
+  const targetDirection = {
+    x: targetVector.x / targetDistance,
+    y: targetVector.y / targetDistance,
+  };
+  let bestIndex: number | null = null;
+  let bestSimilarity = 0;
+
+  points.forEach((point, index) => {
+    const pointVector = {
+      x: point.x - center.x,
+      y: point.y - center.y,
+    };
+    const pointDistance = Math.hypot(pointVector.x, pointVector.y);
+
+    if (pointDistance === 0) {
+      return;
+    }
+
+    const similarity = (pointVector.x / pointDistance) * targetDirection.x + (pointVector.y / pointDistance) * targetDirection.y;
+
+    if (similarity > bestSimilarity) {
+      bestSimilarity = similarity;
+      bestIndex = index;
+    }
+  });
+
+  return bestIndex === null ? null : { index: bestIndex, point: { ...target } };
 }
 
 export function snapRadiusToNeighborAverage(

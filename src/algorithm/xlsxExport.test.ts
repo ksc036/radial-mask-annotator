@@ -16,6 +16,7 @@ describe('xlsx export utilities', () => {
       visible: true,
       displayPoints: [],
       editedRadii: {},
+      editedPointPositions: {},
       manualExcludedIndices: [],
       rayCount: 32,
       threshold: 24,
