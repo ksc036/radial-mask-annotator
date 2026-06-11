@@ -11,6 +11,8 @@ interface ImageCanvasProps {
   autoExcludedIndices: Set<number>;
   manualExcludedIndices: Set<number>;
   pointOpacity: number;
+  lineOpacity: number;
+  polygonOpacity: number;
   hoveredPointIndex: number | null;
   removalRange?: RemovalRange | null;
   onCenterChange: (point: Point) => void;
@@ -24,6 +26,8 @@ interface ImageCanvasProps {
 
 interface SavedPolygonOverlay {
   id: number;
+  label: string;
+  color: string;
   effectivePoints: EffectivePolygonPoint[];
 }
 
@@ -41,6 +45,8 @@ export default function ImageCanvas({
   autoExcludedIndices,
   manualExcludedIndices,
   pointOpacity,
+  lineOpacity,
+  polygonOpacity,
   hoveredPointIndex,
   removalRange = null,
   onCenterChange,
@@ -76,8 +82,20 @@ export default function ImageCanvas({
 
     const layout = getCanvasImageLayout(canvas, image);
     context.drawImage(image, layout.x, layout.y, layout.width, layout.height);
-    drawSavedOverlays(context, layout, savedOverlays);
-    drawOverlay(context, layout, center, points, effectivePoints, autoExcludedIndices, manualExcludedIndices, pointOpacity, hoveredPointIndex);
+    drawSavedOverlays(context, layout, savedOverlays, lineOpacity, polygonOpacity);
+    drawOverlay(
+      context,
+      layout,
+      center,
+      points,
+      effectivePoints,
+      autoExcludedIndices,
+      manualExcludedIndices,
+      pointOpacity,
+      lineOpacity,
+      polygonOpacity,
+      hoveredPointIndex,
+    );
     drawRemovalRange(context, layout, removalRange);
   }, [
     autoExcludedIndices,
@@ -86,7 +104,9 @@ export default function ImageCanvas({
     hoveredPointIndex,
     image,
     manualExcludedIndices,
+    lineOpacity,
     pointOpacity,
+    polygonOpacity,
     points,
     removalRange,
     savedOverlays,
@@ -213,9 +233,12 @@ function drawOverlay(
   autoExcludedIndices: Set<number>,
   manualExcludedIndices: Set<number>,
   pointOpacity: number,
+  lineOpacity: number,
+  polygonOpacity: number,
   hoveredPointIndex: number | null,
 ) {
   if (effectivePoints.length > 1) {
+    context.save();
     context.beginPath();
     effectivePoints.forEach((point, index) => {
       const canvasPoint = imageToCanvasPoint(point, layout);
@@ -226,11 +249,14 @@ function drawOverlay(
       }
     });
     context.closePath();
-    context.fillStyle = 'rgb(212 63 54 / 0.16)';
+    context.globalAlpha = polygonOpacity;
+    context.fillStyle = '#d43f36';
+    context.fill();
+    context.globalAlpha = lineOpacity;
     context.strokeStyle = '#d43f36';
     context.lineWidth = 4;
-    context.fill();
     context.stroke();
+    context.restore();
   }
 
   points.forEach((point, index) => {
@@ -264,12 +290,19 @@ function drawOverlay(
   }
 }
 
-function drawSavedOverlays(context: CanvasRenderingContext2D, layout: CanvasImageLayout, savedOverlays: SavedPolygonOverlay[]) {
+function drawSavedOverlays(
+  context: CanvasRenderingContext2D,
+  layout: CanvasImageLayout,
+  savedOverlays: SavedPolygonOverlay[],
+  lineOpacity: number,
+  polygonOpacity: number,
+) {
   savedOverlays.forEach((overlay) => {
     if (overlay.effectivePoints.length < 2) {
       return;
     }
 
+    context.save();
     context.beginPath();
     overlay.effectivePoints.forEach((point, index) => {
       const canvasPoint = imageToCanvasPoint(point, layout);
@@ -280,12 +313,44 @@ function drawSavedOverlays(context: CanvasRenderingContext2D, layout: CanvasImag
       }
     });
     context.closePath();
-    context.fillStyle = 'rgb(11 95 131 / 0.1)';
-    context.strokeStyle = '#0b5f83';
-    context.lineWidth = 2;
+    context.globalAlpha = polygonOpacity;
+    context.fillStyle = overlay.color;
     context.fill();
+    context.globalAlpha = lineOpacity;
+    context.strokeStyle = overlay.color;
+    context.lineWidth = 3;
     context.stroke();
+    context.restore();
+
+    drawSavedOverlayLabel(context, layout, overlay);
   });
+}
+
+function drawSavedOverlayLabel(context: CanvasRenderingContext2D, layout: CanvasImageLayout, overlay: SavedPolygonOverlay) {
+  const anchor = getPolygonCentroid(overlay.effectivePoints);
+  const canvasAnchor = imageToCanvasPoint(anchor, layout);
+
+  context.save();
+  context.fillStyle = overlay.color;
+  context.font = '700 16px Avenir Next, sans-serif';
+  context.textAlign = 'center';
+  context.fillText(String(overlay.id), canvasAnchor.x, canvasAnchor.y);
+  context.restore();
+}
+
+function getPolygonCentroid(points: Point[]) {
+  const total = points.reduce(
+    (sum, point) => ({
+      x: sum.x + point.x,
+      y: sum.y + point.y,
+    }),
+    { x: 0, y: 0 },
+  );
+
+  return {
+    x: total.x / points.length,
+    y: total.y / points.length,
+  };
 }
 
 function drawRemovalRange(context: CanvasRenderingContext2D, layout: CanvasImageLayout, removalRange: RemovalRange | null) {

@@ -21,6 +21,8 @@ describe('ImageCanvas', () => {
         autoExcludedIndices={new Set()}
         manualExcludedIndices={new Set([0])}
         pointOpacity={0.85}
+        lineOpacity={0.9}
+        polygonOpacity={0.16}
         hoveredPointIndex={null}
         savedOverlays={[]}
         onCenterChange={vi.fn()}
@@ -67,10 +69,14 @@ describe('ImageCanvas', () => {
         autoExcludedIndices={new Set()}
         manualExcludedIndices={new Set()}
         pointOpacity={0.85}
+        lineOpacity={0.9}
+        polygonOpacity={0.16}
         hoveredPointIndex={null}
         savedOverlays={[
           {
             id: 7,
+            label: 'Annotation 7',
+            color: '#d43f36',
             effectivePoints: [
               { index: 0, x: 40, y: 40, angle: 0, fallback: false, gradient: 10 },
               { index: 1, x: 60, y: 40, angle: 0, fallback: false, gradient: 10 },

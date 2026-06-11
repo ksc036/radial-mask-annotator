@@ -55,7 +55,7 @@ select {
 .control-panel {
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 18px;
   padding: 22px;
   border: 1px solid #d4cbb9;
   background: #fbf8f1;
@@ -75,6 +75,21 @@ h1 {
   color: #17201a;
   font-size: 2rem;
   line-height: 1.05;
+}
+
+.control-section {
+  display: grid;
+  gap: 14px;
+  border-top: 1px solid #d9d0bf;
+  padding-top: 14px;
+}
+
+.control-section h2,
+.saved-list h2 {
+  margin: 0;
+  color: #273129;
+  font-size: 1rem;
+  line-height: 1.2;
 }
 
 .status-text {
@@ -209,6 +224,11 @@ input[type='range'] {
   font-size: 0.86rem;
 }
 
+.compact-action {
+  min-height: 34px;
+  padding: 0 9px;
+}
+
 .icon-action {
   width: 34px;
   height: 34px;
@@ -241,9 +261,16 @@ input[type='range'] {
   opacity: 0.5;
 }
 
-.saved-list h2 {
-  margin: 0 0 10px;
-  font-size: 1rem;
+.danger-action {
+  color: #9b2d28;
+}
+
+.saved-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 10px;
 }
 
 .saved-list p {
@@ -272,6 +299,19 @@ input[type='range'] {
   display: grid;
   gap: 3px;
   min-width: 0;
+}
+
+.saved-summary strong {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.saved-color {
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  box-shadow: 0 0 0 1px rgb(0 0 0 / 0.16);
 }
 
 .saved-summary span {

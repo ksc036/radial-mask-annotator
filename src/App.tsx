@@ -1,4 +1,4 @@
-import { Download, Eye, EyeOff, Pencil, Save, Upload } from 'lucide-react';
+import { Download, Eye, EyeOff, Pencil, Save, Trash2, Upload } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { rgbToGrayscale } from './algorithm/grayscale';
 import { getWorkingImageSize, wasImageResized } from './algorithm/imageProcessing';
@@ -17,6 +17,8 @@ import ImageCanvas from './components/ImageCanvas';
 
 const RAY_COUNTS = [16, 32, 64, 128];
 const RADIUS_SNAP_THRESHOLD = 8;
+const STEP_SIZE = 0.5;
+const ANNOTATION_COLORS = ['#d43f36', '#0b5f83', '#2f8f5b', '#b26a00', '#6f55c7', '#b63b7a', '#4d7f1f', '#8a6b22'];
 
 interface RemovalRange {
   start: Point;
@@ -30,9 +32,10 @@ export default function App() {
   const [rayCount, setRayCount] = useState(32);
   const [threshold, setThreshold] = useState(24);
   const [maxRadius, setMaxRadius] = useState(120);
-  const [stepSize, setStepSize] = useState(1);
   const [outlierThreshold, setOutlierThreshold] = useState(35);
   const [pointOpacity, setPointOpacity] = useState(0.85);
+  const [lineOpacity, setLineOpacity] = useState(0.9);
+  const [polygonOpacity, setPolygonOpacity] = useState(0.16);
   const [editedRadii, setEditedRadii] = useState<Record<number, number>>({});
   const [manualExcludedIndices, setManualExcludedIndices] = useState<Set<number>>(() => new Set());
   const [hoveredPointIndex, setHoveredPointIndex] = useState<number | null>(null);
@@ -54,9 +57,9 @@ export default function App() {
       rayCount,
       threshold,
       maxRadius,
-      stepSize,
+      stepSize: STEP_SIZE,
     }).points;
-  }, [center, grayscale, image, maxRadius, rayCount, stepSize, threshold]);
+  }, [center, grayscale, image, maxRadius, rayCount, threshold]);
 
   const polygon = useMemo(
     () =>
@@ -78,7 +81,12 @@ export default function App() {
     () =>
       savedAnnotations
         .filter((annotation) => annotation.visible)
-        .map((annotation) => ({ id: annotation.id, effectivePoints: annotation.displayPoints })),
+        .map((annotation) => ({
+          id: annotation.id,
+          label: `Annotation ${annotation.id}`,
+          color: getAnnotationColor(annotation.id),
+          effectivePoints: annotation.displayPoints,
+        })),
     [savedAnnotations],
   );
   const excludedCount = autoExcludedIndices.size + manualExcludedIndices.size;
@@ -194,15 +202,6 @@ export default function App() {
     setSaveStatus(`Moved point ${selectedPointIndex + 1} ${delta > 0 ? 'outward' : 'inward'}.`);
   }
 
-  function toggleHoveredExclusion() {
-    if (hoveredPointIndex === null) {
-      setSaveStatus('Hover a radial point before pressing r.');
-      return;
-    }
-
-    togglePointExclusion(hoveredPointIndex);
-  }
-
   function startPointRemoval() {
     if (hoveredPointIndex !== null) {
       togglePointExclusion(hoveredPointIndex);
@@ -284,7 +283,7 @@ export default function App() {
       return;
     }
 
-    const nextId = savedAnnotations.length + 1;
+    const nextId = Math.max(0, ...savedAnnotations.map((annotation) => annotation.id)) + 1;
 
     setSavedAnnotations((current) => [
       ...current,
@@ -301,7 +300,7 @@ export default function App() {
         rayCount,
         threshold,
         maxRadius,
-        stepSize,
+        stepSize: STEP_SIZE,
         outlierThreshold,
       },
     ]);
@@ -321,7 +320,6 @@ export default function App() {
     setRayCount(annotation.rayCount);
     setThreshold(annotation.threshold);
     setMaxRadius(annotation.maxRadius);
-    setStepSize(annotation.stepSize);
     setOutlierThreshold(annotation.outlierThreshold);
     setEditedRadii({ ...annotation.editedRadii });
     setManualExcludedIndices(new Set(annotation.manualExcludedIndices));
@@ -331,6 +329,11 @@ export default function App() {
       current.map((item) => (item.id === annotation.id ? { ...item, visible: false } : item)),
     );
     setSaveStatus(`Editing annotation ${annotation.id}.`);
+  }
+
+  function deleteSavedAnnotation(annotationId: number) {
+    setSavedAnnotations((current) => current.filter((annotation) => annotation.id !== annotationId));
+    setSaveStatus(`Deleted annotation ${annotationId}.`);
   }
 
   function exportCsv() {
@@ -364,6 +367,8 @@ export default function App() {
             autoExcludedIndices={autoExcludedIndices}
             manualExcludedIndices={manualExcludedIndices}
             pointOpacity={pointOpacity}
+            lineOpacity={lineOpacity}
+            polygonOpacity={polygonOpacity}
             hoveredPointIndex={hoveredPointIndex}
             savedOverlays={visibleSavedOverlays}
             removalRange={removalRange}
@@ -393,72 +398,88 @@ export default function App() {
             <input aria-label="Upload image" type="file" accept="image/*" onChange={handleUpload} />
           </label>
 
-          <div className="field">
-            <label htmlFor="ray-count">Ray count</label>
-            <select id="ray-count" value={rayCount} onChange={(event) => setRayCount(Number(event.target.value))}>
-              {RAY_COUNTS.map((count) => (
-                <option key={count} value={count}>
-                  {count}
-                </option>
-              ))}
-            </select>
-          </div>
+          <section className="control-section" aria-labelledby="detection-heading">
+            <h2 id="detection-heading">Detection</h2>
+            <div className="field">
+              <label htmlFor="ray-count">Ray count</label>
+              <select id="ray-count" value={rayCount} onChange={(event) => setRayCount(Number(event.target.value))}>
+                {RAY_COUNTS.map((count) => (
+                  <option key={count} value={count}>
+                    {count}
+                  </option>
+                ))}
+              </select>
+            </div>
 
-          <SliderField
-            id="threshold"
-            label="Gradient threshold"
-            min={1}
-            max={120}
-            step={1}
-            value={threshold}
-            onChange={setThreshold}
-          />
-          <SliderField
-            id="max-radius"
-            label="Max radius"
-            min={10}
-            max={500}
-            step={1}
-            value={maxRadius}
-            onChange={setMaxRadius}
-          />
-          <SliderField id="step-size" label="Step size" min={0.5} max={6} step={0.5} value={stepSize} onChange={setStepSize} />
-          <SliderField
-            id="outlier-threshold"
-            label="Outlier threshold"
-            min={1}
-            max={180}
-            step={1}
-            value={outlierThreshold}
-            onChange={setOutlierThreshold}
-          />
-          <SliderField
-            id="point-opacity"
-            label="Point opacity"
-            min={0.1}
-            max={1}
-            step={0.05}
-            value={pointOpacity}
-            onChange={setPointOpacity}
-          />
+            <SliderField
+              id="threshold"
+              label="Gradient threshold"
+              min={1}
+              max={120}
+              step={1}
+              value={threshold}
+              onChange={setThreshold}
+            />
+            <SliderField
+              id="max-radius"
+              label="Max radius"
+              min={10}
+              max={500}
+              step={1}
+              value={maxRadius}
+              onChange={setMaxRadius}
+            />
+            <SliderField
+              id="outlier-threshold"
+              label="Outlier threshold"
+              min={1}
+              max={180}
+              step={1}
+              value={outlierThreshold}
+              onChange={setOutlierThreshold}
+            />
+          </section>
 
-          <div className="point-nudge" aria-label="Selected point controls">
-            <span>{selectedPointIndex === null ? 'No point selected' : `Point ${selectedPointIndex + 1}`}</span>
-            <span className="nudge-hint">Use [ / ] to nudge</span>
-          </div>
+          <section className="control-section" aria-labelledby="view-heading">
+            <h2 id="view-heading">View</h2>
+            <SliderField
+              id="point-opacity"
+              label="Point opacity"
+              min={0}
+              max={1}
+              step={0.05}
+              value={pointOpacity}
+              onChange={setPointOpacity}
+            />
+            <SliderField
+              id="line-opacity"
+              label="Line opacity"
+              min={0}
+              max={1}
+              step={0.05}
+              value={lineOpacity}
+              onChange={setLineOpacity}
+            />
+            <SliderField
+              id="polygon-opacity"
+              label="Polygon opacity"
+              min={0}
+              max={1}
+              step={0.05}
+              value={polygonOpacity}
+              onChange={setPolygonOpacity}
+            />
+
+            <div className="point-nudge" aria-label="Selected point controls">
+              <span>{selectedPointIndex === null ? 'No point selected' : `Point ${selectedPointIndex + 1}`}</span>
+              <span className="nudge-hint">Use [ / ] to nudge</span>
+            </div>
+          </section>
 
           <div className="button-row">
             <button className="secondary-action" type="button" onClick={saveCurrentAnnotation}>
               <Save size={16} aria-hidden="true" />
               Save annotation
-            </button>
-            <button className="secondary-action" type="button" onClick={toggleHoveredExclusion}>
-              <EyeOff size={16} aria-hidden="true" />
-              Remove hovered point
-            </button>
-            <button className="secondary-action" type="button" onClick={exportCsv} disabled={savedAnnotations.length === 0}>
-              <Download size={16} aria-hidden="true" />
-              Export CSV
             </button>
           </div>
 
@@ -474,7 +495,13 @@ export default function App() {
           </dl>
 
           <section className="saved-list" aria-label="Saved annotations">
-            <h2>Saved</h2>
+            <div className="saved-header">
+              <h2>Saved</h2>
+              <button className="secondary-action compact-action" type="button" onClick={exportCsv} disabled={savedAnnotations.length === 0}>
+                <Download size={16} aria-hidden="true" />
+                Export CSV
+              </button>
+            </div>
             {savedAnnotations.length === 0 ? (
               <p>No saved annotations.</p>
             ) : (
@@ -482,7 +509,10 @@ export default function App() {
                 {savedAnnotations.map((annotation) => (
                   <li key={annotation.id}>
                     <div className="saved-summary">
-                      <strong>Annotation {annotation.id}</strong>
+                      <strong>
+                        <span className="saved-color" style={{ background: getAnnotationColor(annotation.id) }} aria-hidden="true" />
+                        Annotation {annotation.id}
+                      </strong>
                       <span>Area: {Math.round(annotation.areaPixels)} px</span>
                     </div>
                     <div className="saved-actions">
@@ -503,6 +533,15 @@ export default function App() {
                         title="Edit annotation"
                       >
                         <Pencil size={16} aria-hidden="true" />
+                      </button>
+                      <button
+                        className="icon-action danger-action"
+                        type="button"
+                        onClick={() => deleteSavedAnnotation(annotation.id)}
+                        aria-label={`Delete annotation ${annotation.id}`}
+                        title="Delete annotation"
+                      >
+                        <Trash2 size={16} aria-hidden="true" />
                       </button>
                     </div>
                   </li>
@@ -561,6 +600,10 @@ function getPointIndicesInRange(points: BoundaryPoint[], range: RemovalRange) {
   return points.flatMap((point, index) =>
     point.x >= minX && point.x <= maxX && point.y >= minY && point.y <= maxY ? [index] : [],
   );
+}
+
+function getAnnotationColor(annotationId: number) {
+  return ANNOTATION_COLORS[(annotationId - 1) % ANNOTATION_COLORS.length];
 }
 
 function getStatusText(hasImage: boolean, hasCenter: boolean, fallbackCount: number) {
