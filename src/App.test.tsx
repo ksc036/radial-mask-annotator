@@ -46,6 +46,9 @@ vi.mock('./components/ImageCanvas', () => ({
       <button type="button" onClick={() => onCenterChange({ x: 4, y: 4 })}>
         Mock canvas click
       </button>
+      <button type="button" onClick={() => onCenterChange({ x: 7, y: 7 })}>
+        Mock canvas click elsewhere
+      </button>
       <button type="button" onClick={() => onPointRadiusChange?.(0, 18)}>
         Mock point drag
       </button>
@@ -368,6 +371,94 @@ describe('App', () => {
     expect(screen.getByText(/Editing annotation 1/i)).toBeInTheDocument();
     expect(screen.getByTestId('mock-center')).toHaveTextContent('4,4');
     expect(screen.getByTestId('mock-saved-overlays')).toHaveTextContent('0');
+  });
+
+  it('updates the active saved annotation instead of creating a new one', async () => {
+    render(<App />);
+
+    fireEvent.change(screen.getByLabelText(/upload image/i), {
+      target: { files: [new File(['fake'], 'nucleus.png', { type: 'image/png' })] },
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText('Click the center of one round nucleus.')).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Mock canvas click' }));
+    fireEvent.keyDown(window, { key: 's' });
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /edit annotation 1/i })).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: /edit annotation 1/i }));
+    fireEvent.click(screen.getByRole('button', { name: 'Mock point drag' }));
+    fireEvent.keyDown(window, { key: 's' });
+
+    await waitFor(() => {
+      expect(screen.getByText(/Updated annotation 1/i)).toBeInTheDocument();
+    });
+    expect(within(screen.getByLabelText(/saved annotations/i)).getByText(/Annotation 1/i)).toBeInTheDocument();
+    expect(screen.queryByText(/Annotation 2/i)).not.toBeInTheDocument();
+  });
+
+  it('does not reset the center from ordinary canvas clicks while editing', async () => {
+    render(<App />);
+
+    fireEvent.change(screen.getByLabelText(/upload image/i), {
+      target: { files: [new File(['fake'], 'nucleus.png', { type: 'image/png' })] },
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText('Click the center of one round nucleus.')).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Mock canvas click' }));
+    fireEvent.keyDown(window, { key: 's' });
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /edit annotation 1/i })).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: /edit annotation 1/i }));
+    fireEvent.click(screen.getByRole('button', { name: 'Mock canvas click elsewhere' }));
+
+    expect(screen.getByTestId('mock-center')).toHaveTextContent('4,4');
+    expect(screen.getByText(/Press c to choose a new center/i)).toBeInTheDocument();
+  });
+
+  it('allows center replacement only after c and cancels editing with escape', async () => {
+    render(<App />);
+
+    fireEvent.change(screen.getByLabelText(/upload image/i), {
+      target: { files: [new File(['fake'], 'nucleus.png', { type: 'image/png' })] },
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText('Click the center of one round nucleus.')).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Mock canvas click' }));
+    fireEvent.keyDown(window, { key: 's' });
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /edit annotation 1/i })).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: /edit annotation 1/i }));
+    fireEvent.keyDown(window, { key: 'c', code: 'KeyC' });
+    fireEvent.click(screen.getByRole('button', { name: 'Mock canvas click elsewhere' }));
+
+    expect(screen.getByTestId('mock-center')).toHaveTextContent('7,7');
+
+    fireEvent.keyDown(window, { key: 'Escape', code: 'Escape' });
+
+    expect(screen.getByTestId('mock-center')).toHaveTextContent('none');
+    expect(screen.getByTestId('mock-saved-overlays')).toHaveTextContent('1');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Mock canvas click elsewhere' }));
+
+    expect(screen.getByTestId('mock-center')).toHaveTextContent('7,7');
   });
 
   it('toggles hovered point removal with r and restores it with r again', async () => {

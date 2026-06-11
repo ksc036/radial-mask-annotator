@@ -42,6 +42,8 @@ export default function App() {
   const [selectedPointIndex, setSelectedPointIndex] = useState<number | null>(null);
   const [currentImagePointer, setCurrentImagePointer] = useState<Point | null>(null);
   const [removalRange, setRemovalRange] = useState<RemovalRange | null>(null);
+  const [activeEditingAnnotationId, setActiveEditingAnnotationId] = useState<number | null>(null);
+  const [centerSelectionEnabled, setCenterSelectionEnabled] = useState(true);
   const [savedAnnotations, setSavedAnnotations] = useState<SavedAnnotation[]>([]);
   const [saveStatus, setSaveStatus] = useState('');
 
@@ -113,6 +115,14 @@ export default function App() {
         event.preventDefault();
         nudgeSelectedPoint(1);
       }
+      if (isShortcutKey(event, 'KeyC', 'c')) {
+        event.preventDefault();
+        enableCenterSelection();
+      }
+      if (isShortcutKey(event, 'Escape', 'escape')) {
+        event.preventDefault();
+        cancelCurrentEdit();
+      }
     }
 
     function handleKeyUp(event: KeyboardEvent) {
@@ -155,6 +165,8 @@ export default function App() {
       setSelectedPointIndex(null);
       setCurrentImagePointer(null);
       setRemovalRange(null);
+      setActiveEditingAnnotationId(null);
+      setCenterSelectionEnabled(true);
       setSavedAnnotations([]);
       setSaveStatus(
         prepared.resized
@@ -171,13 +183,52 @@ export default function App() {
   }
 
   function handleCenterChange(nextCenter: Point) {
+    if (center && !centerSelectionEnabled) {
+      setSaveStatus('Press c to choose a new center, or Esc to cancel the current edit.');
+      return;
+    }
+
     setCenter(nextCenter);
     setEditedRadii({});
     setManualExcludedIndices(new Set());
     setHoveredPointIndex(null);
     setSelectedPointIndex(null);
     setRemovalRange(null);
+    setCenterSelectionEnabled(false);
     setSaveStatus('');
+  }
+
+  function enableCenterSelection() {
+    if (!image) {
+      return;
+    }
+
+    setCenterSelectionEnabled(true);
+    setSaveStatus('Click a new center.');
+  }
+
+  function cancelCurrentEdit() {
+    setCenter(null);
+    setEditedRadii({});
+    setManualExcludedIndices(new Set());
+    setHoveredPointIndex(null);
+    setSelectedPointIndex(null);
+    setCurrentImagePointer(null);
+    setRemovalRange(null);
+    setCenterSelectionEnabled(true);
+
+    if (activeEditingAnnotationId !== null) {
+      setSavedAnnotations((current) =>
+        current.map((annotation) =>
+          annotation.id === activeEditingAnnotationId ? { ...annotation, visible: true } : annotation,
+        ),
+      );
+      setActiveEditingAnnotationId(null);
+      setSaveStatus('Canceled editing. Click a center to start again.');
+      return;
+    }
+
+    setSaveStatus('Click a center to start again.');
   }
 
   function handlePointRadiusChange(index: number, radius: number) {
@@ -283,28 +334,41 @@ export default function App() {
       return;
     }
 
+    if (activeEditingAnnotationId !== null) {
+      const updatedAnnotation = buildSavedAnnotation(activeEditingAnnotationId, false, center);
+
+      setSavedAnnotations((current) =>
+        current.map((annotation) =>
+          annotation.id === activeEditingAnnotationId ? { ...updatedAnnotation, visible: annotation.visible } : annotation,
+        ),
+      );
+      setSaveStatus(`Updated annotation ${activeEditingAnnotationId}.`);
+      return;
+    }
+
     const nextId = Math.max(0, ...savedAnnotations.map((annotation) => annotation.id)) + 1;
 
-    setSavedAnnotations((current) => [
-      ...current,
-      {
-        id: nextId,
-        center: { ...center },
-        areaPixels,
-        vertexCount: effectivePolygon.length,
-        excludedCount,
-        visible: true,
-        displayPoints: effectivePolygon.map((point) => ({ ...point })),
-        editedRadii: { ...editedRadii },
-        manualExcludedIndices: Array.from(manualExcludedIndices),
-        rayCount,
-        threshold,
-        maxRadius,
-        stepSize: STEP_SIZE,
-        outlierThreshold,
-      },
-    ]);
+    setSavedAnnotations((current) => [...current, buildSavedAnnotation(nextId, true, center)]);
     setSaveStatus(`Saved annotation ${nextId}.`);
+  }
+
+  function buildSavedAnnotation(id: number, visible: boolean, annotationCenter: Point): SavedAnnotation {
+    return {
+      id,
+      center: { ...annotationCenter },
+      areaPixels,
+      vertexCount: effectivePolygon.length,
+      excludedCount,
+      visible,
+      displayPoints: effectivePolygon.map((point) => ({ ...point })),
+      editedRadii: { ...editedRadii },
+      manualExcludedIndices: Array.from(manualExcludedIndices),
+      rayCount,
+      threshold,
+      maxRadius,
+      stepSize: STEP_SIZE,
+      outlierThreshold,
+    };
   }
 
   function toggleSavedVisual(annotationId: number) {
@@ -325,6 +389,10 @@ export default function App() {
     setManualExcludedIndices(new Set(annotation.manualExcludedIndices));
     setHoveredPointIndex(null);
     setSelectedPointIndex(null);
+    setCurrentImagePointer(null);
+    setRemovalRange(null);
+    setActiveEditingAnnotationId(annotation.id);
+    setCenterSelectionEnabled(false);
     setSavedAnnotations((current) =>
       current.map((item) => (item.id === annotation.id ? { ...item, visible: false } : item)),
     );
