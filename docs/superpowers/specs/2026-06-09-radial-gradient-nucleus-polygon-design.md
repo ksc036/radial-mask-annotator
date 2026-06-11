@@ -138,3 +138,47 @@ UI smoke tests should verify that the app renders, accepts an uploaded image con
 - Export formats such as JSON, CSV, SVG, or masks.
 
 These can be added after the raw radial gradient detector is visually validated.
+
+## Approved Extension: Point Editing And CSV Export
+
+The next version adds interactive cleanup for occasional bad radial points and lets users save multiple customized nucleus annotations.
+
+### Outlier Exclusion
+
+Add an `outlier threshold` slider. For each radial endpoint, compute its radius from the selected center. If its radius differs from the previous or next endpoint radius by at least the threshold, mark it as automatically excluded.
+
+Automatically excluded points remain visible as inactive endpoint markers, but they are not used when drawing the polygon or calculating area.
+
+### Manual Point Editing
+
+When the mouse pointer hovers over a radial endpoint, highlight that endpoint. The user can drag the endpoint along its original radial direction to adjust its radius. Dragging changes only that endpoint.
+
+The user can also manually exclude the hovered or selected endpoint. Manual exclusions are separate from automatic exclusions so a point can be restored later.
+
+### Point Visibility
+
+Add a `point opacity` slider. It changes endpoint marker opacity only, leaving the polygon fill and outline stable so the image boundary remains readable.
+
+### Saving Annotations
+
+When the user presses `s`, save the current polygon annotation. A saved annotation includes:
+
+- annotation id
+- center point
+- edited endpoint positions
+- automatically excluded points
+- manually excluded points
+- effective polygon vertices
+- area in pixels
+
+After saving, the current annotation remains visible and the user can click another center to start a new annotation.
+
+### CSV Export
+
+Add CSV export for saved annotations. The MVP columns are:
+
+```text
+id,center_x,center_y,area_pixels,vertex_count,excluded_count
+```
+
+Area is calculated in pixel units using the polygon shoelace formula over the effective, non-excluded vertices.
