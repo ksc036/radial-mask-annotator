@@ -230,9 +230,10 @@ input[type='range'] {
   font-weight: 700;
 }
 
-.nudge-actions {
-  display: inline-flex;
-  gap: 6px;
+.nudge-hint {
+  color: #686154;
+  font-size: 0.82rem;
+  font-weight: 700;
 }
 
 .secondary-action:disabled {

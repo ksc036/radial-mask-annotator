@@ -187,7 +187,7 @@ Each saved annotation also has an edit action. Editing restores that annotation'
 
 Saved annotation overlays are directly interactive on the image. Touching or clicking a visible saved overlay opens that annotation in the editor, matching the explicit edit button in the saved list.
 
-Clicking a radial endpoint selects it for fine adjustment. The selected endpoint can be nudged inward or outward with `-` and `+` buttons, moving the endpoint along its original ray by one pixel per click without applying neighbor snap.
+Clicking a radial endpoint selects it for fine adjustment. The selected endpoint can be nudged with keyboard shortcuts: `[` moves it inward toward the center and `]` moves it outward from the center by one pixel per press without applying neighbor snap.
 
 ### CSV Export
 

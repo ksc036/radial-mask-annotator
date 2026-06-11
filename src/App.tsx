@@ -1,4 +1,4 @@
-import { Download, Eye, EyeOff, Minus, Pencil, Plus, Save, Upload } from 'lucide-react';
+import { Download, Eye, EyeOff, Pencil, Save, Upload } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { rgbToGrayscale } from './algorithm/grayscale';
 import { getWorkingImageSize, wasImageResized } from './algorithm/imageProcessing';
@@ -88,6 +88,14 @@ export default function App() {
         event.preventDefault();
         toggleHoveredExclusion();
       }
+      if (isShortcutKey(event, 'BracketLeft', '[')) {
+        event.preventDefault();
+        nudgeSelectedPoint(-1);
+      }
+      if (isShortcutKey(event, 'BracketRight', ']')) {
+        event.preventDefault();
+        nudgeSelectedPoint(1);
+      }
     }
 
     window.addEventListener('keydown', handleKeyDown);
@@ -114,10 +122,10 @@ export default function App() {
       setGrayscale(gray);
       setCenter(null);
       setEditedRadii({});
-    setManualExcludedIndices(new Set());
-    setHoveredPointIndex(null);
-    setSelectedPointIndex(null);
-    setSaveStatus(
+      setManualExcludedIndices(new Set());
+      setHoveredPointIndex(null);
+      setSelectedPointIndex(null);
+      setSaveStatus(
         prepared.resized
           ? `Large image resized to ${prepared.image.naturalWidth} x ${prepared.image.naturalHeight} for stable editing.`
           : '',
@@ -354,26 +362,7 @@ export default function App() {
 
           <div className="point-nudge" aria-label="Selected point controls">
             <span>{selectedPointIndex === null ? 'No point selected' : `Point ${selectedPointIndex + 1}`}</span>
-            <div className="nudge-actions">
-              <button
-                className="icon-action"
-                type="button"
-                onClick={() => nudgeSelectedPoint(-1)}
-                aria-label="Decrease selected point radius"
-                title="Move point inward"
-              >
-                <Minus size={16} aria-hidden="true" />
-              </button>
-              <button
-                className="icon-action"
-                type="button"
-                onClick={() => nudgeSelectedPoint(1)}
-                aria-label="Increase selected point radius"
-                title="Move point outward"
-              >
-                <Plus size={16} aria-hidden="true" />
-              </button>
-            </div>
+            <span className="nudge-hint">Use [ / ] to nudge</span>
           </div>
 
           <div className="button-row">

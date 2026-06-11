@@ -297,7 +297,7 @@ describe('App', () => {
     expect(screen.getByText(/Hover a radial point before pressing r/i)).toBeInTheDocument();
   });
 
-  it('nudges the selected radial point with plus and minus buttons', async () => {
+  it('nudges the selected radial point with bracket keys', async () => {
     render(<App />);
 
     fireEvent.change(screen.getByLabelText(/upload image/i), {
@@ -310,17 +310,21 @@ describe('App', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Mock canvas click' }));
     fireEvent.click(screen.getByRole('button', { name: 'Mock point select' }));
-    fireEvent.click(screen.getByRole('button', { name: /increase selected point radius/i }));
+    fireEvent.keyDown(window, { key: ']', code: 'BracketRight' });
 
     await waitFor(() => {
       expect(screen.getByText('Moved point 1 outward.')).toBeInTheDocument();
     });
 
-    fireEvent.click(screen.getByRole('button', { name: /decrease selected point radius/i }));
+    fireEvent.keyDown(window, { key: '[', code: 'BracketLeft' });
 
     await waitFor(() => {
       expect(screen.getByText('Moved point 1 inward.')).toBeInTheDocument();
     });
+
+    expect(screen.queryByRole('button', { name: /increase selected point radius/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /decrease selected point radius/i })).not.toBeInTheDocument();
+    expect(screen.getByText(/Use \[ \/ \] to nudge/i)).toBeInTheDocument();
   });
 
   it('shows why s did not save when no valid polygon exists', () => {
