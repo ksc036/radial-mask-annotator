@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import type { EffectivePolygonPoint } from '../algorithm/polygonEditing';
 import type { BoundaryPoint, Point } from '../algorithm/radialBoundary';
+import { isTiffFile } from '../algorithm/tiffImage';
 
 interface ImageCanvasProps {
   image: HTMLImageElement | null;
@@ -282,11 +283,13 @@ function hasImageTransfer(dataTransfer: DataTransfer) {
     return true;
   }
 
-  return Array.from(dataTransfer.items).some((item) => item.kind === 'file' && item.type.startsWith('image/'));
+  return Array.from(dataTransfer.items).some(
+    (item) => item.kind === 'file' && (item.type.startsWith('image/') || item.type === 'application/x-tiff'),
+  );
 }
 
 function getFirstImageFile(files: FileList | File[]) {
-  return Array.from(files).find((file) => file.type.startsWith('image/')) ?? null;
+  return Array.from(files).find((file) => file.type.startsWith('image/') || isTiffFile(file)) ?? null;
 }
 
 function drawEmptyState(context: CanvasRenderingContext2D, canvas: HTMLCanvasElement) {

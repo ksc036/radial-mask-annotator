@@ -236,6 +236,49 @@ describe('ImageCanvas', () => {
     expect(onImageDrop).toHaveBeenCalledWith(file);
   });
 
+  it('passes a dropped TIFF file to the upload handler even without a MIME type', () => {
+    const onImageDrop = vi.fn();
+
+    render(
+      <ImageCanvas
+        image={null}
+        center={null}
+        points={[]}
+        effectivePoints={[]}
+        autoExcludedIndices={new Set()}
+        manualExcludedIndices={new Set()}
+        pointOpacity={0.85}
+        lineOpacity={0.9}
+        polygonOpacity={0.16}
+        pointSize={2.5}
+        lineWidth={1.5}
+        showOriginalOnly={false}
+        hoveredPointIndex={null}
+        savedOverlays={[]}
+        onCenterChange={vi.fn()}
+        onPointHover={vi.fn()}
+        onPointSelect={vi.fn()}
+        onPointRadiusChange={vi.fn()}
+        onPointToggleExcluded={vi.fn()}
+        onSavedOverlayEdit={vi.fn()}
+        onPointerImageMove={vi.fn()}
+        onImageDrop={onImageDrop}
+        onUploadRequest={vi.fn()}
+      />,
+    );
+
+    const file = new File(['fake'], 'drop.tiff', { type: '' });
+    const canvas = screen.getByLabelText('Image annotation canvas');
+
+    fireEvent.drop(canvas, {
+      dataTransfer: {
+        files: [file],
+      },
+    });
+
+    expect(onImageDrop).toHaveBeenCalledWith(file);
+  });
+
   it('requests file upload when the empty canvas is clicked', () => {
     const onUploadRequest = vi.fn();
 

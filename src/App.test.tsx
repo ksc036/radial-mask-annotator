@@ -123,6 +123,7 @@ describe('App', () => {
     render(<App />);
 
     expect(screen.getByLabelText(/upload image/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/upload image/i)).toHaveAttribute('accept', 'image/*,.tif,.tiff');
     expect(screen.queryByText(/Upload image/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/Radial Gradient Tool/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/Cell nucleus polygon/i)).not.toBeInTheDocument();

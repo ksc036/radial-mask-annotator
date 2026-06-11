@@ -15,6 +15,7 @@ import {
   type SavedAnnotation,
 } from './algorithm/polygonEditing';
 import { findRadialBoundary, type BoundaryPoint, type Point } from './algorithm/radialBoundary';
+import { decodeTiffFileToImage, isTiffFile } from './algorithm/tiffImage';
 import { createFeretMeasurementsXlsx, createMeasurementWorkbookFilename } from './algorithm/xlsxExport';
 import ImageCanvas from './components/ImageCanvas';
 
@@ -690,7 +691,7 @@ export default function App() {
             className="file-input"
             aria-label="Upload image"
             type="file"
-            accept="image/*"
+            accept="image/*,.tif,.tiff"
             onChange={handleUpload}
           />
 
@@ -984,6 +985,14 @@ function downloadBlob(blob: Blob, filename: string) {
 }
 
 function loadImage(file: File) {
+  if (isTiffFile(file)) {
+    return decodeTiffFileToImage(file);
+  }
+
+  return loadBrowserImage(file);
+}
+
+function loadBrowserImage(file: File) {
   return new Promise<HTMLImageElement>((resolve, reject) => {
     const image = new Image();
     const objectUrl = URL.createObjectURL(file);
