@@ -1,8 +1,8 @@
 import { mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
-export async function saveDatasetExport(payload, { rootDir = process.env.DATA_DIR || 'data', now = new Date() } = {}) {
-  validatePayload(payload);
+export async function saveDatasetImage(payload, { rootDir = process.env.DATA_DIR || 'data', now = new Date() } = {}) {
+  validateImagePayload(payload);
 
   const baseName = imageBaseName(payload.imageFileName);
   const timestamp = formatTimestamp(now);
@@ -10,32 +10,43 @@ export async function saveDatasetExport(payload, { rootDir = process.env.DATA_DI
   const datasetDir = join(rootDir, folderName);
   const imageDir = join(datasetDir, 'image');
   const masksDir = join(datasetDir, 'masks');
+  const imagePath = join(imageDir, `${baseName}.png`);
 
   await mkdir(imageDir, { recursive: true });
   await mkdir(masksDir, { recursive: true });
-
-  const imagePath = join(imageDir, `${baseName}.png`);
-  const xlsxPath = join(datasetDir, `${folderName}.xlsx`);
-  const maskPaths = payload.masks.map((mask) => join(masksDir, ensurePngFilename(mask.fileName)));
-
   await writeFile(imagePath, decodeDataUrl(payload.imageDataUrl));
-  await Promise.all(payload.masks.map((mask, index) => writeFile(maskPaths[index], decodeDataUrl(mask.dataUrl))));
-  await writeFile(xlsxPath, decodeDataUrl(payload.xlsxDataUrl));
 
   return {
     folderName,
     path: datasetDir,
     files: {
       image: imagePath,
-      masks: maskPaths,
-      workbook: xlsxPath,
     },
   };
 }
 
-function validatePayload(payload) {
+export async function saveDatasetMasks(payload, { rootDir = process.env.DATA_DIR || 'data' } = {}) {
+  validateMasksPayload(payload);
+
+  const datasetDir = join(rootDir, safeFolderName(payload.folderName));
+  const masksDir = join(datasetDir, 'masks');
+  const maskPaths = payload.masks.map((mask) => join(masksDir, ensurePngFilename(mask.fileName)));
+
+  await mkdir(masksDir, { recursive: true });
+  await Promise.all(payload.masks.map((mask, index) => writeFile(maskPaths[index], decodeDataUrl(mask.dataUrl))));
+
+  return {
+    folderName: payload.folderName,
+    path: datasetDir,
+    files: {
+      masks: maskPaths,
+    },
+  };
+}
+
+function validateImagePayload(payload) {
   if (!payload || typeof payload !== 'object') {
-    throw new Error('Dataset payload is required.');
+    throw new Error('Image upload payload is required.');
   }
   if (typeof payload.imageFileName !== 'string' || payload.imageFileName.trim() === '') {
     throw new Error('imageFileName is required.');
@@ -43,9 +54,16 @@ function validatePayload(payload) {
   if (typeof payload.imageDataUrl !== 'string') {
     throw new Error('imageDataUrl is required.');
   }
-  if (typeof payload.xlsxDataUrl !== 'string') {
-    throw new Error('xlsxDataUrl is required.');
+}
+
+function validateMasksPayload(payload) {
+  if (!payload || typeof payload !== 'object') {
+    throw new Error('Mask export payload is required.');
   }
+  if (typeof payload.folderName !== 'string' || payload.folderName.trim() === '') {
+    throw new Error('folderName is required.');
+  }
+  safeFolderName(payload.folderName);
   if (!Array.isArray(payload.masks) || payload.masks.length === 0) {
     throw new Error('At least one mask is required.');
   }
@@ -63,6 +81,14 @@ function imageBaseName(fileName) {
 function ensurePngFilename(fileName) {
   const baseName = sanitizeFilename(fileName.replace(/\.[^.]+$/, '') || 'mask');
   return `${baseName}.png`;
+}
+
+function safeFolderName(folderName) {
+  if (folderName !== sanitizeFilename(folderName)) {
+    throw new Error('Invalid dataset folder name.');
+  }
+
+  return folderName;
 }
 
 function sanitizeFilename(value) {

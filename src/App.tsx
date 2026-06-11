@@ -1,6 +1,6 @@
 import { Download, Eye, EyeOff, Pencil, Trash2 } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { blobToDataUrl, createMaskPayloads, createWorkingImageDataUrl } from './algorithm/datasetPayload';
+import { createMaskPayloads, createWorkingImageDataUrl } from './algorithm/datasetPayload';
 import { rgbToGrayscale } from './algorithm/grayscale';
 import { getWorkingImageSize, wasImageResized } from './algorithm/imageProcessing';
 import {
@@ -31,6 +31,7 @@ export default function App() {
   const uploadInputRef = useRef<HTMLInputElement | null>(null);
   const [image, setImage] = useState<HTMLImageElement | null>(null);
   const [imageFileName, setImageFileName] = useState('image');
+  const [datasetFolderName, setDatasetFolderName] = useState<string | null>(null);
   const [grayscale, setGrayscale] = useState<Uint8ClampedArray | null>(null);
   const [center, setCenter] = useState<Point | null>(null);
   const [rayCount, setRayCount] = useState(32);
@@ -207,9 +208,13 @@ export default function App() {
       const imageData = readImageData(prepared.image);
       const gray = rgbToGrayscale(imageData.data, prepared.image.naturalWidth, prepared.image.naturalHeight);
       const defaultMaxRadius = Math.round(Math.min(prepared.image.naturalWidth, prepared.image.naturalHeight) * 0.28);
+      let nextSaveStatus = prepared.resized
+        ? `Large image resized to ${prepared.image.naturalWidth} x ${prepared.image.naturalHeight} for stable editing.`
+        : '';
 
       setImage(prepared.image);
       setImageFileName(file.name);
+      setDatasetFolderName(null);
       setGrayscale(gray);
       setCenter(null);
       setEditedRadii({});
@@ -221,19 +226,52 @@ export default function App() {
       setActiveEditingAnnotationId(null);
       setCenterSelectionEnabled(true);
       setSavedAnnotations([]);
-      setSaveStatus(
-        prepared.resized
-          ? `Large image resized to ${prepared.image.naturalWidth} x ${prepared.image.naturalHeight} for stable editing.`
-          : '',
-      );
       setMaxRadius(defaultMaxRadius);
+
+      try {
+        const folderName = await uploadWorkingImage(file.name, prepared.image);
+        setDatasetFolderName(folderName);
+        nextSaveStatus = nextSaveStatus
+          ? `${nextSaveStatus} Image saved to ${folderName}.`
+          : `Image saved to ${folderName}.`;
+      } catch {
+        nextSaveStatus = nextSaveStatus
+          ? `${nextSaveStatus} Server image save failed.`
+          : 'Server image save failed.';
+      }
+
+      setSaveStatus(nextSaveStatus);
     } catch {
       setImage(null);
       setImageFileName('image');
+      setDatasetFolderName(null);
       setGrayscale(null);
       setCenter(null);
       setSaveStatus('Image failed to load. Try a smaller image or a different image format.');
     }
+  }
+
+  async function uploadWorkingImage(fileName: string, workingImage: HTMLImageElement) {
+    const response = await fetch('/api/upload-image', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        imageFileName: fileName,
+        imageDataUrl: createWorkingImageDataUrl(workingImage),
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`Image upload failed with ${response.status}`);
+    }
+
+    const result = (await response.json()) as { folderName?: string };
+
+    if (!result.folderName) {
+      throw new Error('Image upload response did not include folderName.');
+    }
+
+    return result.folderName;
   }
 
   function handleCenterChange(nextCenter: Point) {
@@ -489,31 +527,34 @@ export default function App() {
     downloadBlob(blob, createMeasurementWorkbookFilename(imageFileName));
 
     if (!image) {
-      setSaveStatus('XLSX downloaded. No image is loaded for dataset export.');
+      setSaveStatus('XLSX downloaded. No image is loaded for mask export.');
+      return;
+    }
+
+    if (!datasetFolderName) {
+      setSaveStatus('XLSX downloaded. Upload the image to the dataset server before exporting masks.');
       return;
     }
 
     try {
       const payload = {
-        imageFileName,
-        imageDataUrl: createWorkingImageDataUrl(image),
-        xlsxDataUrl: await blobToDataUrl(blob),
+        folderName: datasetFolderName,
         masks: createMaskPayloads(savedAnnotations, image.naturalWidth, image.naturalHeight),
       };
-      const response = await fetch('/api/export-dataset', {
+      const response = await fetch('/api/export-masks', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       });
 
       if (!response.ok) {
-        throw new Error(`Dataset export failed with ${response.status}`);
+        throw new Error(`Mask export failed with ${response.status}`);
       }
 
       const result = (await response.json()) as { folderName?: string };
-      setSaveStatus(result.folderName ? `Dataset saved to ${result.folderName}.` : 'Dataset saved.');
+      setSaveStatus(result.folderName ? `Masks saved to ${result.folderName}.` : 'Masks saved.');
     } catch {
-      setSaveStatus('XLSX downloaded, but dataset server save failed.');
+      setSaveStatus('XLSX downloaded, but mask server save failed.');
     }
   }
 

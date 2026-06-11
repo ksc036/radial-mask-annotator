@@ -10,9 +10,7 @@ export interface DatasetCanvas {
 export type CanvasFactory = () => DatasetCanvas;
 
 export interface DatasetExportPayload {
-  imageFileName: string;
-  imageDataUrl: string;
-  xlsxDataUrl: string;
+  folderName: string;
   masks: Array<{
     fileName: string;
     dataUrl: string;

@@ -3,7 +3,7 @@ import { stat } from 'node:fs/promises';
 import { createServer } from 'node:http';
 import { extname, join, normalize, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { saveDatasetExport } from './datasetStorage.mjs';
+import { saveDatasetImage, saveDatasetMasks } from './datasetStorage.mjs';
 
 const __dirname = fileURLToPath(new URL('.', import.meta.url));
 const rootDir = resolve(__dirname, '..');
@@ -19,9 +19,16 @@ const server = createServer(async (request, response) => {
       return;
     }
 
-    if (request.method === 'POST' && request.url === '/api/export-dataset') {
+    if (request.method === 'POST' && request.url === '/api/upload-image') {
       const payload = JSON.parse(await readRequestBody(request));
-      const result = await saveDatasetExport(payload, { rootDir: dataDir });
+      const result = await saveDatasetImage(payload, { rootDir: dataDir });
+      sendJson(response, 200, { folderName: result.folderName, path: result.path });
+      return;
+    }
+
+    if (request.method === 'POST' && request.url === '/api/export-masks') {
+      const payload = JSON.parse(await readRequestBody(request));
+      const result = await saveDatasetMasks(payload, { rootDir: dataDir });
       sendJson(response, 200, { folderName: result.folderName, path: result.path });
       return;
     }

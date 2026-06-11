@@ -24,3 +24,7 @@ import '@testing-library/jest-dom/vitest';
     set textAlign(_value: CanvasTextAlign) {},
   } as unknown as CanvasRenderingContext2D;
 };
+
+HTMLCanvasElement.prototype.toDataURL = function toDataURL() {
+  return 'data:image/png;base64,';
+};

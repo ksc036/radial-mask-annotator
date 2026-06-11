@@ -216,6 +216,37 @@ describe('App', () => {
     });
   });
 
+  it('uploads the working image to the dataset server when an image is loaded', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ folderName: '2026-06-11_17-30-22_nucleus' }),
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    vi.spyOn(HTMLCanvasElement.prototype, 'toDataURL').mockReturnValue('data:image/png;base64,canvas');
+
+    render(<App />);
+
+    fireEvent.change(screen.getByLabelText(/upload image/i), {
+      target: { files: [new File(['fake'], 'nucleus.png', { type: 'image/png' })] },
+    });
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith(
+        '/api/upload-image',
+        expect.objectContaining({
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+        }),
+      );
+    });
+    const payload = JSON.parse(fetchMock.mock.calls[0][1].body);
+    expect(payload).toEqual({
+      imageFileName: 'nucleus.png',
+      imageDataUrl: 'data:image/png;base64,canvas',
+    });
+    expect(screen.getByText(/Image saved to 2026-06-11_17-30-22_nucleus/i)).toBeInTheDocument();
+  });
+
   it('opens the file picker when the empty canvas requests upload', () => {
     const inputClick = vi.spyOn(HTMLInputElement.prototype, 'click').mockImplementation(() => undefined);
 
@@ -386,7 +417,7 @@ describe('App', () => {
     expect(within(screen.getByLabelText(/saved annotations/i)).getByRole('button', { name: /export xlsx/i })).toBeDisabled();
   });
 
-  it('sends the working image, masks, and workbook to the dataset export server', async () => {
+  it('sends only masks to the existing dataset folder when exporting xlsx', async () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
       json: async () => ({ folderName: '2026-06-11_17-30-22_nucleus' }),
@@ -412,11 +443,16 @@ describe('App', () => {
       expect(screen.getByText(/Saved annotation 1/i)).toBeInTheDocument();
     });
 
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith('/api/upload-image', expect.any(Object));
+    });
+    fetchMock.mockClear();
+
     fireEvent.click(within(screen.getByLabelText(/saved annotations/i)).getByRole('button', { name: /export xlsx/i }));
 
     await waitFor(() => {
       expect(fetchMock).toHaveBeenCalledWith(
-        '/api/export-dataset',
+        '/api/export-masks',
         expect.objectContaining({
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -424,11 +460,11 @@ describe('App', () => {
       );
     });
     const payload = JSON.parse(fetchMock.mock.calls[0][1].body);
-    expect(payload.imageFileName).toBe('nucleus.png');
-    expect(payload.imageDataUrl).toBe('data:image/png;base64,canvas');
-    expect(payload.xlsxDataUrl).toMatch(/^data:application\/vnd\.openxmlformats-officedocument\.spreadsheetml\.sheet;base64,/);
+    expect(payload.folderName).toBe('2026-06-11_17-30-22_nucleus');
     expect(payload.masks).toEqual([{ fileName: 'annotation_1.png', dataUrl: 'data:image/png;base64,canvas' }]);
-    expect(screen.getByText(/Dataset saved to 2026-06-11_17-30-22_nucleus/i)).toBeInTheDocument();
+    expect(payload.imageDataUrl).toBeUndefined();
+    expect(payload.xlsxDataUrl).toBeUndefined();
+    expect(screen.getByText(/Masks saved to 2026-06-11_17-30-22_nucleus/i)).toBeInTheDocument();
   });
 
   it('clears saved annotations when a new image is uploaded', async () => {

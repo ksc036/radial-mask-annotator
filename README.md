@@ -10,8 +10,8 @@
 - saved annotation 개별 표시/숨김, 편집, 삭제
 - Feret average/min/max XLSX export
 - 학습용 dataset 저장
-  - `image/`: annotation 좌표와 같은 크기의 작업 이미지 PNG
-  - `masks/`: saved polygon별 binary mask PNG
+  - 이미지 업로드 시점에 `image/`에 작업 이미지 PNG 저장
+  - `Export XLSX` 시점에 `masks/`에 saved polygon별 binary mask PNG 저장
   - saved polygon 하나가 mask 객체 하나입니다.
 
 ## Docker로 실행
@@ -59,7 +59,7 @@ http://127.0.0.1:4173
 
 ## Dataset Export 구조
 
-`Export XLSX` 버튼을 누르면 XLSX 다운로드와 함께 서버에도 dataset이 저장됩니다.
+이미지를 업로드하면 서버가 timestamp/image-name folder를 한 번 만들고 `image/`에 작업 이미지 PNG를 저장합니다. 이후 `Export XLSX` 버튼을 누르면 XLSX는 브라우저에서 다운로드되고, 서버에는 같은 folder의 `masks/` 아래로 binary mask PNG만 저장됩니다.
 
 ```text
 data/
@@ -69,7 +69,6 @@ data/
     masks/
       annotation_1.png
       annotation_2.png
-    2026-06-11_17-48-40_imageName.xlsx
 ```
 
 `masks/annotation_N.png`는 binary mask입니다.
@@ -85,7 +84,7 @@ data/
 3. boundary point를 확인하고 필요하면 수정합니다.
 4. `S`를 눌러 annotation을 저장합니다.
 5. 다른 객체 중심을 다시 클릭해서 추가 annotation을 만듭니다.
-6. `Export XLSX`를 눌러 XLSX와 학습용 image/mask dataset을 저장합니다.
+6. `Export XLSX`를 눌러 XLSX를 다운로드하고 학습용 masks를 저장합니다.
 
 ## 단축키
 
@@ -118,13 +117,18 @@ docker compose config
 
 ## 저장 API
 
-앱은 `POST /api/export-dataset`으로 다음 데이터를 보냅니다.
+이미지 업로드 시점에 앱은 `POST /api/upload-image`로 다음 데이터를 보냅니다.
 
 - `imageFileName`
 - `imageDataUrl`
-- `xlsxDataUrl`
+
+서버는 이 시점에 `DATA_DIR` 아래에 timestamp/image-name 폴더를 만들고 `image/`와 `masks/` 폴더를 생성합니다.
+
+XLSX export 시점에 앱은 `POST /api/export-masks`로 다음 데이터를 보냅니다.
+
+- `folderName`
 - `masks[]`
   - `fileName`
   - `dataUrl`
 
-서버는 `DATA_DIR` 아래에 timestamp/image-name 폴더를 만들고 파일을 저장합니다.
+서버는 기존 `folderName` 아래 `masks/`에 mask 파일만 저장합니다. XLSX 파일은 서버에 저장하지 않고 브라우저 다운로드만 수행합니다.
