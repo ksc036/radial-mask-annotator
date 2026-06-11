@@ -155,6 +155,10 @@ When the mouse pointer hovers over a radial endpoint, highlight that endpoint. T
 
 The user can also manually exclude the hovered or selected endpoint. Manual exclusions are separate from automatic exclusions so a point can be restored later.
 
+Manual exclusion is primarily controlled from the keyboard: while hovering a radial endpoint, pressing `r` toggles that point between excluded and restored. Excluded points stay visible as transparent inactive markers so they can be hovered again and restored.
+
+When dragging a radial endpoint, the app keeps the point on its original ray. Small edits snap to the natural neighbor radius, defined as the average radius of the previous and next radial points. Larger edits escape the snap and preserve the user's free radius.
+
 ### Point Visibility
 
 Add a `point opacity` slider. It changes endpoint marker opacity only, leaving the polygon fill and outline stable so the image boundary remains readable.
@@ -172,6 +176,8 @@ When the user presses `s`, save the current polygon annotation. A saved annotati
 - area in pixels
 
 After saving, the current annotation remains visible and the user can click another center to start a new annotation.
+
+If `s` cannot save because there is no center or fewer than three effective polygon vertices, the app shows a visible save status message instead of failing silently. Successful saves also show an immediate status message.
 
 ### CSV Export
 

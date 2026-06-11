@@ -14,6 +14,7 @@ interface ImageCanvasProps {
   onCenterChange: (point: Point) => void;
   onPointHover: (index: number | null) => void;
   onPointRadiusChange: (index: number, radius: number) => void;
+  onPointToggleExcluded: (index: number) => void;
 }
 
 export default function ImageCanvas({
@@ -28,6 +29,7 @@ export default function ImageCanvas({
   onCenterChange,
   onPointHover,
   onPointRadiusChange,
+  onPointToggleExcluded,
 }: ImageCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const [draggedPointIndex, setDraggedPointIndex] = useState<number | null>(null);
@@ -70,6 +72,11 @@ export default function ImageCanvas({
     const nearestPointIndex = findNearestPointIndex(canvasPoint, layout, points);
 
     if (nearestPointIndex !== null) {
+      if (autoExcludedIndices.has(nearestPointIndex) || manualExcludedIndices.has(nearestPointIndex)) {
+        onPointToggleExcluded(nearestPointIndex);
+        onPointHover(nearestPointIndex);
+        return;
+      }
       setDraggedPointIndex(nearestPointIndex);
       onPointHover(nearestPointIndex);
       return;

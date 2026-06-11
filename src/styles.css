@@ -83,6 +83,14 @@ h1 {
   line-height: 1.45;
 }
 
+.save-status {
+  margin: 10px 0 0;
+  color: #0b5f83;
+  font-size: 0.92rem;
+  font-weight: 700;
+  line-height: 1.35;
+}
+
 .upload-control {
   display: flex;
   align-items: center;

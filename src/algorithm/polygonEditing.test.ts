@@ -5,6 +5,7 @@ import {
   formatAnnotationsCsv,
   getEffectivePolygonPoints,
   markOutlierPoints,
+  snapRadiusToNeighborAverage,
   updatePointRadius,
   type SavedAnnotation,
 } from './polygonEditing';
@@ -69,5 +70,17 @@ describe('polygon editing utilities', () => {
     ];
 
     expect(formatAnnotationsCsv(rows)).toBe('id,center_x,center_y,area_pixels,vertex_count,excluded_count\n1,4.25,8.75,123,27,5');
+  });
+
+  it('snaps a dragged radius to the neighbor average when close enough', () => {
+    const points = [point(10, 0, 0), point(14, Math.PI / 2, 1), point(20, Math.PI, 2), point(10, (3 * Math.PI) / 2, 3)];
+
+    expect(snapRadiusToNeighborAverage(points, center, 1, 15.5, 3)).toBe(15);
+  });
+
+  it('keeps a dragged radius free when it is far from the neighbor average', () => {
+    const points = [point(10, 0, 0), point(14, Math.PI / 2, 1), point(20, Math.PI, 2), point(10, (3 * Math.PI) / 2, 3)];
+
+    expect(snapRadiusToNeighborAverage(points, center, 1, 24, 3)).toBe(24);
   });
 });

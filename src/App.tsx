@@ -6,6 +6,7 @@ import {
   formatAnnotationsCsv,
   getEffectivePolygonPoints,
   markOutlierPoints,
+  snapRadiusToNeighborAverage,
   updatePointRadius,
   type SavedAnnotation,
 } from './algorithm/polygonEditing';
@@ -13,6 +14,7 @@ import { findRadialBoundary, type BoundaryPoint, type Point } from './algorithm/
 import ImageCanvas from './components/ImageCanvas';
 
 const RAY_COUNTS = [16, 32, 64, 128];
+const RADIUS_SNAP_THRESHOLD = 8;
 
 export default function App() {
   const [image, setImage] = useState<HTMLImageElement | null>(null);
@@ -28,6 +30,7 @@ export default function App() {
   const [manualExcludedIndices, setManualExcludedIndices] = useState<Set<number>>(() => new Set());
   const [hoveredPointIndex, setHoveredPointIndex] = useState<number | null>(null);
   const [savedAnnotations, setSavedAnnotations] = useState<SavedAnnotation[]>([]);
+  const [saveStatus, setSaveStatus] = useState('');
 
   const rawPolygon = useMemo<BoundaryPoint[]>(() => {
     if (!image || !grayscale || !center) {
@@ -71,6 +74,10 @@ export default function App() {
         event.preventDefault();
         saveCurrentAnnotation();
       }
+      if (event.key.toLowerCase() === 'r') {
+        event.preventDefault();
+        toggleHoveredExclusion();
+      }
     }
 
     window.addEventListener('keydown', handleKeyDown);
@@ -95,6 +102,7 @@ export default function App() {
     setEditedRadii({});
     setManualExcludedIndices(new Set());
     setHoveredPointIndex(null);
+    setSaveStatus('');
     setMaxRadius(defaultMaxRadius);
   }
 
@@ -103,30 +111,49 @@ export default function App() {
     setEditedRadii({});
     setManualExcludedIndices(new Set());
     setHoveredPointIndex(null);
+    setSaveStatus('');
   }
 
   function handlePointRadiusChange(index: number, radius: number) {
-    setEditedRadii((current) => ({ ...current, [index]: radius }));
+    if (!center) {
+      return;
+    }
+
+    const snappedRadius = snapRadiusToNeighborAverage(polygon, center, index, radius, RADIUS_SNAP_THRESHOLD);
+    setEditedRadii((current) => ({ ...current, [index]: snappedRadius }));
   }
 
   function toggleHoveredExclusion() {
     if (hoveredPointIndex === null) {
+      setSaveStatus('Hover a radial point before pressing r.');
       return;
     }
 
+    togglePointExclusion(hoveredPointIndex);
+  }
+
+  function togglePointExclusion(index: number) {
     setManualExcludedIndices((current) => {
       const next = new Set(current);
-      if (next.has(hoveredPointIndex)) {
-        next.delete(hoveredPointIndex);
+      if (next.has(index)) {
+        next.delete(index);
+        setSaveStatus(`Restored point ${index + 1}.`);
       } else {
-        next.add(hoveredPointIndex);
+        next.add(index);
+        setSaveStatus(`Removed point ${index + 1}.`);
       }
       return next;
     });
   }
 
   function saveCurrentAnnotation() {
-    if (!center || effectivePolygon.length < 3) {
+    if (!center) {
+      setSaveStatus('Select a center before saving.');
+      return;
+    }
+
+    if (effectivePolygon.length < 3) {
+      setSaveStatus('Need at least 3 active points before saving.');
       return;
     }
 
@@ -140,6 +167,7 @@ export default function App() {
         excludedCount,
       },
     ]);
+    setSaveStatus(`Saved annotation ${savedAnnotations.length + 1}.`);
   }
 
   function exportCsv() {
@@ -169,6 +197,7 @@ export default function App() {
             onCenterChange={handleCenterChange}
             onPointHover={setHoveredPointIndex}
             onPointRadiusChange={handlePointRadiusChange}
+            onPointToggleExcluded={togglePointExclusion}
           />
         </div>
 
@@ -177,6 +206,7 @@ export default function App() {
             <p className="eyebrow">Radial Gradient Tool</p>
             <h1>Cell nucleus polygon</h1>
             <p className="status-text">{getStatusText(Boolean(image), Boolean(center), fallbackCount)}</p>
+            {saveStatus ? <p className="save-status">{saveStatus}</p> : null}
           </div>
 
           <label className="upload-control">

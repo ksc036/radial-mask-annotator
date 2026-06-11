@@ -1,13 +1,15 @@
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import App from './App';
 
 vi.mock('./components/ImageCanvas', () => ({
   default: ({
     onCenterChange,
+    onPointHover,
     onPointRadiusChange,
   }: {
     onCenterChange: (point: { x: number; y: number }) => void;
+    onPointHover?: (index: number | null) => void;
     onPointRadiusChange?: (index: number, radius: number) => void;
   }) => (
     <div>
@@ -16,6 +18,9 @@ vi.mock('./components/ImageCanvas', () => ({
       </button>
       <button type="button" onClick={() => onPointRadiusChange?.(0, 18)}>
         Mock point drag
+      </button>
+      <button type="button" onClick={() => onPointHover?.(0)}>
+        Mock point hover
       </button>
     </div>
   ),
@@ -96,8 +101,43 @@ describe('App', () => {
     fireEvent.keyDown(window, { key: 's' });
 
     await waitFor(() => {
-      expect(screen.getByText(/Annotation 1/i)).toBeInTheDocument();
+      expect(screen.getByText(/Saved annotation 1/i)).toBeInTheDocument();
     });
-    expect(screen.getByText(/Area:/i)).toBeInTheDocument();
+    expect(within(screen.getByLabelText(/saved annotations/i)).getByText(/Annotation 1/i)).toBeInTheDocument();
+    expect(within(screen.getByLabelText(/saved annotations/i)).getByText(/Area:/i)).toBeInTheDocument();
+  });
+
+  it('toggles hovered point removal with r and restores it with r again', async () => {
+    render(<App />);
+
+    fireEvent.change(screen.getByLabelText(/upload image/i), {
+      target: { files: [new File(['fake'], 'nucleus.png', { type: 'image/png' })] },
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText('Click the center of one round nucleus.')).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Mock canvas click' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Mock point hover' }));
+    fireEvent.keyDown(window, { key: 'r' });
+
+    await waitFor(() => {
+      expect(screen.getByText('Removed point 1.')).toBeInTheDocument();
+    });
+
+    fireEvent.keyDown(window, { key: 'r' });
+
+    await waitFor(() => {
+      expect(screen.getByText('Restored point 1.')).toBeInTheDocument();
+    });
+  });
+
+  it('shows why s did not save when no valid polygon exists', () => {
+    render(<App />);
+
+    fireEvent.keyDown(window, { key: 's' });
+
+    expect(screen.getByText(/Select a center before saving/i)).toBeInTheDocument();
   });
 });

@@ -57,6 +57,24 @@ export function updatePointRadius(point: BoundaryPoint, center: Point, radius: n
   };
 }
 
+export function snapRadiusToNeighborAverage(
+  points: BoundaryPoint[],
+  center: Point,
+  index: number,
+  radius: number,
+  snapThreshold: number,
+): number {
+  if (points.length < 3 || snapThreshold <= 0) {
+    return radius;
+  }
+
+  const previous = points[(index - 1 + points.length) % points.length];
+  const next = points[(index + 1) % points.length];
+  const neighborAverage = (distanceFromCenter(previous, center) + distanceFromCenter(next, center)) / 2;
+
+  return Math.abs(radius - neighborAverage) <= snapThreshold ? neighborAverage : radius;
+}
+
 export function calculatePolygonAreaPixels(points: Point[]): number {
   if (points.length < 3) {
     return 0;
@@ -89,4 +107,3 @@ export function formatAnnotationsCsv(rows: SavedAnnotation[]) {
 function formatNumber(value: number) {
   return Number.isInteger(value) ? String(value) : value.toFixed(2).replace(/0+$/, '').replace(/\.$/, '');
 }
-
