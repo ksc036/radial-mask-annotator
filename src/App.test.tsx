@@ -3,10 +3,21 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import App from './App';
 
 vi.mock('./components/ImageCanvas', () => ({
-  default: ({ onCenterChange }: { onCenterChange: (point: { x: number; y: number }) => void }) => (
-    <button type="button" onClick={() => onCenterChange({ x: 4, y: 4 })}>
-      Mock canvas click
-    </button>
+  default: ({
+    onCenterChange,
+    onPointRadiusChange,
+  }: {
+    onCenterChange: (point: { x: number; y: number }) => void;
+    onPointRadiusChange?: (index: number, radius: number) => void;
+  }) => (
+    <div>
+      <button type="button" onClick={() => onCenterChange({ x: 4, y: 4 })}>
+        Mock canvas click
+      </button>
+      <button type="button" onClick={() => onPointRadiusChange?.(0, 18)}>
+        Mock point drag
+      </button>
+    </div>
   ),
 }));
 
@@ -43,6 +54,10 @@ describe('App', () => {
     expect(screen.getByLabelText(/gradient threshold/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/max radius/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/step size/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/outlier threshold/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/point opacity/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /remove hovered point/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /export csv/i })).toBeInTheDocument();
   });
 
   it('keeps the last threshold value after upload and center clicks', async () => {
@@ -64,5 +79,25 @@ describe('App', () => {
     await waitFor(() => {
       expect(screen.getByLabelText(/gradient threshold/i)).toHaveValue('55');
     });
+  });
+
+  it('saves the current annotation with s and shows its pixel area', async () => {
+    render(<App />);
+
+    fireEvent.change(screen.getByLabelText(/upload image/i), {
+      target: { files: [new File(['fake'], 'nucleus.png', { type: 'image/png' })] },
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText('Click the center of one round nucleus.')).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Mock canvas click' }));
+    fireEvent.keyDown(window, { key: 's' });
+
+    await waitFor(() => {
+      expect(screen.getByText(/Annotation 1/i)).toBeInTheDocument();
+    });
+    expect(screen.getByText(/Area:/i)).toBeInTheDocument();
   });
 });

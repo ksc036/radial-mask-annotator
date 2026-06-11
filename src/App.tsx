@@ -1,6 +1,14 @@
-import { Upload } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { Download, EyeOff, Upload } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
 import { rgbToGrayscale } from './algorithm/grayscale';
+import {
+  calculatePolygonAreaPixels,
+  formatAnnotationsCsv,
+  getEffectivePolygonPoints,
+  markOutlierPoints,
+  updatePointRadius,
+  type SavedAnnotation,
+} from './algorithm/polygonEditing';
 import { findRadialBoundary, type BoundaryPoint, type Point } from './algorithm/radialBoundary';
 import ImageCanvas from './components/ImageCanvas';
 
@@ -14,8 +22,14 @@ export default function App() {
   const [threshold, setThreshold] = useState(24);
   const [maxRadius, setMaxRadius] = useState(120);
   const [stepSize, setStepSize] = useState(1);
+  const [outlierThreshold, setOutlierThreshold] = useState(35);
+  const [pointOpacity, setPointOpacity] = useState(0.85);
+  const [editedRadii, setEditedRadii] = useState<Record<number, number>>({});
+  const [manualExcludedIndices, setManualExcludedIndices] = useState<Set<number>>(() => new Set());
+  const [hoveredPointIndex, setHoveredPointIndex] = useState<number | null>(null);
+  const [savedAnnotations, setSavedAnnotations] = useState<SavedAnnotation[]>([]);
 
-  const polygon = useMemo<BoundaryPoint[]>(() => {
+  const rawPolygon = useMemo<BoundaryPoint[]>(() => {
     if (!image || !grayscale || !center) {
       return [];
     }
@@ -31,7 +45,37 @@ export default function App() {
     }).points;
   }, [center, grayscale, image, maxRadius, rayCount, stepSize, threshold]);
 
-  const fallbackCount = polygon.filter((point) => point.fallback).length;
+  const polygon = useMemo(
+    () =>
+      rawPolygon.map((point, index) =>
+        editedRadii[index] === undefined || !center ? point : updatePointRadius(point, center, editedRadii[index]),
+      ),
+    [center, editedRadii, rawPolygon],
+  );
+
+  const autoExcludedIndices = useMemo(
+    () => (center ? markOutlierPoints(polygon, center, outlierThreshold) : new Set<number>()),
+    [center, outlierThreshold, polygon],
+  );
+  const effectivePolygon = useMemo(
+    () => getEffectivePolygonPoints(polygon, autoExcludedIndices, manualExcludedIndices),
+    [autoExcludedIndices, manualExcludedIndices, polygon],
+  );
+  const excludedCount = autoExcludedIndices.size + manualExcludedIndices.size;
+  const fallbackCount = effectivePolygon.filter((point) => point.fallback).length;
+  const areaPixels = Math.round(calculatePolygonAreaPixels(effectivePolygon));
+
+  useEffect(() => {
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key.toLowerCase() === 's') {
+        event.preventDefault();
+        saveCurrentAnnotation();
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  });
 
   async function handleUpload(event: React.ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
@@ -48,18 +92,84 @@ export default function App() {
     setImage(loadedImage);
     setGrayscale(gray);
     setCenter(null);
+    setEditedRadii({});
+    setManualExcludedIndices(new Set());
+    setHoveredPointIndex(null);
     setMaxRadius(defaultMaxRadius);
   }
 
   function handleCenterChange(nextCenter: Point) {
     setCenter(nextCenter);
+    setEditedRadii({});
+    setManualExcludedIndices(new Set());
+    setHoveredPointIndex(null);
+  }
+
+  function handlePointRadiusChange(index: number, radius: number) {
+    setEditedRadii((current) => ({ ...current, [index]: radius }));
+  }
+
+  function toggleHoveredExclusion() {
+    if (hoveredPointIndex === null) {
+      return;
+    }
+
+    setManualExcludedIndices((current) => {
+      const next = new Set(current);
+      if (next.has(hoveredPointIndex)) {
+        next.delete(hoveredPointIndex);
+      } else {
+        next.add(hoveredPointIndex);
+      }
+      return next;
+    });
+  }
+
+  function saveCurrentAnnotation() {
+    if (!center || effectivePolygon.length < 3) {
+      return;
+    }
+
+    setSavedAnnotations((current) => [
+      ...current,
+      {
+        id: current.length + 1,
+        center,
+        areaPixels,
+        vertexCount: effectivePolygon.length,
+        excludedCount,
+      },
+    ]);
+  }
+
+  function exportCsv() {
+    const csv = formatAnnotationsCsv(savedAnnotations);
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = 'nucleus-annotations.csv';
+    anchor.click();
+    URL.revokeObjectURL(url);
   }
 
   return (
     <main className="app-shell">
       <section className="workspace" aria-label="Radial nucleus polygon workspace">
         <div className="canvas-panel">
-          <ImageCanvas image={image} center={center} points={polygon} onCenterChange={handleCenterChange} />
+          <ImageCanvas
+            image={image}
+            center={center}
+            points={polygon}
+            effectivePoints={effectivePolygon}
+            autoExcludedIndices={autoExcludedIndices}
+            manualExcludedIndices={manualExcludedIndices}
+            pointOpacity={pointOpacity}
+            hoveredPointIndex={hoveredPointIndex}
+            onCenterChange={handleCenterChange}
+            onPointHover={setHoveredPointIndex}
+            onPointRadiusChange={handlePointRadiusChange}
+          />
         </div>
 
         <aside className="control-panel" aria-label="Controls">
@@ -107,17 +217,62 @@ export default function App() {
             onChange={setMaxRadius}
           />
           <SliderField id="step-size" label="Step size" min={0.5} max={6} step={0.5} value={stepSize} onChange={setStepSize} />
+          <SliderField
+            id="outlier-threshold"
+            label="Outlier threshold"
+            min={1}
+            max={180}
+            step={1}
+            value={outlierThreshold}
+            onChange={setOutlierThreshold}
+          />
+          <SliderField
+            id="point-opacity"
+            label="Point opacity"
+            min={0.1}
+            max={1}
+            step={0.05}
+            value={pointOpacity}
+            onChange={setPointOpacity}
+          />
+
+          <div className="button-row">
+            <button className="secondary-action" type="button" onClick={toggleHoveredExclusion} disabled={hoveredPointIndex === null}>
+              <EyeOff size={16} aria-hidden="true" />
+              Remove hovered point
+            </button>
+            <button className="secondary-action" type="button" onClick={exportCsv} disabled={savedAnnotations.length === 0}>
+              <Download size={16} aria-hidden="true" />
+              Export CSV
+            </button>
+          </div>
 
           <dl className="metrics">
             <div>
               <dt>Vertices</dt>
-              <dd>{polygon.length}</dd>
+              <dd>{effectivePolygon.length}</dd>
             </div>
             <div>
-              <dt>Fallbacks</dt>
-              <dd>{fallbackCount}</dd>
+              <dt>Area px</dt>
+              <dd>{areaPixels}</dd>
             </div>
           </dl>
+
+          <section className="saved-list" aria-label="Saved annotations">
+            <h2>Saved</h2>
+            {savedAnnotations.length === 0 ? (
+              <p>No saved annotations.</p>
+            ) : (
+              <ol>
+                {savedAnnotations.map((annotation) => (
+                  <li key={annotation.id}>
+                    <strong>Annotation {annotation.id}</strong>
+                    <span>Area: {Math.round(annotation.areaPixels)} px</span>
+                  </li>
+                ))}
+              </ol>
+            )}
+          </section>
         </aside>
       </section>
     </main>
