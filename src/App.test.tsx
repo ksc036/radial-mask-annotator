@@ -117,6 +117,26 @@ describe('App', () => {
     expect(within(screen.getByLabelText(/saved annotations/i)).getByText(/Area:/i)).toBeInTheDocument();
   });
 
+  it('saves with the physical s key even when a slider is focused or the keyboard layout changes the key value', async () => {
+    render(<App />);
+
+    fireEvent.change(screen.getByLabelText(/upload image/i), {
+      target: { files: [new File(['fake'], 'nucleus.png', { type: 'image/png' })] },
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText('Click the center of one round nucleus.')).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Mock canvas click' }));
+    screen.getByLabelText(/gradient threshold/i).focus();
+    fireEvent.keyDown(window, { key: 'ㄴ', code: 'KeyS' });
+
+    await waitFor(() => {
+      expect(screen.getByText(/Saved annotation 1/i)).toBeInTheDocument();
+    });
+  });
+
   it('saves the current annotation with the save button', async () => {
     render(<App />);
 
@@ -237,6 +257,26 @@ describe('App', () => {
 
     await waitFor(() => {
       expect(screen.getByText('Restored point 1.')).toBeInTheDocument();
+    });
+  });
+
+  it('removes with the physical r key even when the keyboard layout changes the key value', async () => {
+    render(<App />);
+
+    fireEvent.change(screen.getByLabelText(/upload image/i), {
+      target: { files: [new File(['fake'], 'nucleus.png', { type: 'image/png' })] },
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText('Click the center of one round nucleus.')).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Mock canvas click' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Mock point hover' }));
+    fireEvent.keyDown(window, { key: 'ㄱ', code: 'KeyR' });
+
+    await waitFor(() => {
+      expect(screen.getByText('Removed point 1.')).toBeInTheDocument();
     });
   });
 

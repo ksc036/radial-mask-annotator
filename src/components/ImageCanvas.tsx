@@ -83,6 +83,7 @@ export default function ImageCanvas({
       if (autoExcludedIndices.has(nearestPointIndex) || manualExcludedIndices.has(nearestPointIndex)) {
         onPointToggleExcluded(nearestPointIndex);
         onPointHover(nearestPointIndex);
+        setDraggedPointIndex(nearestPointIndex);
         return;
       }
       setDraggedPointIndex(nearestPointIndex);

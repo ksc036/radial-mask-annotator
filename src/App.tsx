@@ -78,11 +78,11 @@ export default function App() {
 
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
-      if (event.key.toLowerCase() === 's') {
+      if (isShortcutKey(event, 'KeyS', 's')) {
         event.preventDefault();
         saveCurrentAnnotation();
       }
-      if (event.key.toLowerCase() === 'r') {
+      if (isShortcutKey(event, 'KeyR', 'r')) {
         event.preventDefault();
         toggleHoveredExclusion();
       }
@@ -443,6 +443,10 @@ function getStatusText(hasImage: boolean, hasCenter: boolean, fallbackCount: num
   }
 
   return 'Boundary detected on every ray.';
+}
+
+function isShortcutKey(event: KeyboardEvent, code: string, key: string) {
+  return event.code === code || event.key.toLowerCase() === key;
 }
 
 function loadImage(file: File) {
