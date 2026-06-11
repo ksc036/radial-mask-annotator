@@ -13,6 +13,9 @@ interface ImageCanvasProps {
   pointOpacity: number;
   lineOpacity: number;
   polygonOpacity: number;
+  pointSize: number;
+  lineWidth: number;
+  showOriginalOnly: boolean;
   hoveredPointIndex: number | null;
   removalRange?: RemovalRange | null;
   onCenterChange: (point: Point) => void;
@@ -23,6 +26,7 @@ interface ImageCanvasProps {
   onSavedOverlayEdit: (id: number) => void;
   onPointerImageMove: (point: Point | null) => void;
   onImageDrop: (file: File) => void;
+  onUploadRequest: () => void;
 }
 
 interface SavedPolygonOverlay {
@@ -48,6 +52,9 @@ export default function ImageCanvas({
   pointOpacity,
   lineOpacity,
   polygonOpacity,
+  pointSize,
+  lineWidth,
+  showOriginalOnly,
   hoveredPointIndex,
   removalRange = null,
   onCenterChange,
@@ -58,6 +65,7 @@ export default function ImageCanvas({
   onSavedOverlayEdit,
   onPointerImageMove,
   onImageDrop,
+  onUploadRequest,
 }: ImageCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const [draggedPointIndex, setDraggedPointIndex] = useState<number | null>(null);
@@ -85,7 +93,10 @@ export default function ImageCanvas({
 
     const layout = getCanvasImageLayout(canvas, image);
     context.drawImage(image, layout.x, layout.y, layout.width, layout.height);
-    drawSavedOverlays(context, layout, savedOverlays, lineOpacity, polygonOpacity);
+    if (showOriginalOnly) {
+      return;
+    }
+    drawSavedOverlays(context, layout, savedOverlays, lineOpacity, polygonOpacity, lineWidth);
     drawOverlay(
       context,
       layout,
@@ -97,9 +108,11 @@ export default function ImageCanvas({
       pointOpacity,
       lineOpacity,
       polygonOpacity,
+      pointSize,
+      lineWidth,
       hoveredPointIndex,
     );
-    drawRemovalRange(context, layout, removalRange);
+    drawRemovalRange(context, layout, removalRange, lineWidth);
   }, [
     autoExcludedIndices,
     center,
@@ -108,17 +121,29 @@ export default function ImageCanvas({
     image,
     manualExcludedIndices,
     lineOpacity,
+    lineWidth,
     pointOpacity,
+    pointSize,
     polygonOpacity,
     points,
     removalRange,
     savedOverlays,
+    showOriginalOnly,
   ]);
 
   function handlePointerDown(event: React.PointerEvent<HTMLCanvasElement>) {
     const canvas = canvasRef.current;
 
-    if (!canvas || !image) {
+    if (!canvas) {
+      return;
+    }
+
+    if (!image) {
+      onUploadRequest();
+      return;
+    }
+
+    if (showOriginalOnly) {
       return;
     }
 
@@ -169,6 +194,12 @@ export default function ImageCanvas({
     const canvas = canvasRef.current;
 
     if (!canvas || !image || !center) {
+      onPointHover(null);
+      onPointerImageMove(null);
+      return;
+    }
+
+    if (showOriginalOnly) {
       onPointHover(null);
       onPointerImageMove(null);
       return;
@@ -264,7 +295,7 @@ function drawEmptyState(context: CanvasRenderingContext2D, canvas: HTMLCanvasEle
   context.fillStyle = '#6e6a5f';
   context.font = '28px Avenir Next, sans-serif';
   context.textAlign = 'center';
-  context.fillText('Upload a color image to begin', canvas.width / 2, canvas.height / 2);
+  context.fillText('Click to upload or drag & drop image to begin', canvas.width / 2, canvas.height / 2);
 }
 
 function drawOverlay(
@@ -278,6 +309,8 @@ function drawOverlay(
   pointOpacity: number,
   lineOpacity: number,
   polygonOpacity: number,
+  pointSize: number,
+  lineWidth: number,
   hoveredPointIndex: number | null,
 ) {
   if (effectivePoints.length > 1) {
@@ -297,7 +330,7 @@ function drawOverlay(
     context.fill();
     context.globalAlpha = lineOpacity;
     context.strokeStyle = '#d43f36';
-    context.lineWidth = 4;
+    context.lineWidth = lineWidth;
     context.stroke();
     context.restore();
   }
@@ -310,12 +343,12 @@ function drawOverlay(
     context.save();
     context.globalAlpha = excluded ? Math.min(pointOpacity, 0.28) : pointOpacity;
     context.beginPath();
-    context.arc(canvasPoint.x, canvasPoint.y, hovered ? 8 : point.fallback ? 6 : 4, 0, 2 * Math.PI);
+    context.arc(canvasPoint.x, canvasPoint.y, hovered ? pointSize + 3 : point.fallback ? pointSize + 1.5 : pointSize, 0, 2 * Math.PI);
     context.fillStyle = excluded ? '#6b6254' : point.fallback ? '#f3b23d' : '#0b5f83';
     context.fill();
     if (excluded || hovered) {
       context.strokeStyle = hovered ? '#ffffff' : '#d43f36';
-      context.lineWidth = hovered ? 3 : 2;
+      context.lineWidth = hovered ? Math.max(1.5, lineWidth) : Math.max(1, lineWidth);
       context.stroke();
     }
     context.restore();
@@ -323,13 +356,16 @@ function drawOverlay(
 
   if (center) {
     const canvasCenter = imageToCanvasPoint(center, layout);
+    context.save();
+    context.globalAlpha = pointOpacity;
     context.beginPath();
-    context.arc(canvasCenter.x, canvasCenter.y, 7, 0, 2 * Math.PI);
+    context.arc(canvasCenter.x, canvasCenter.y, pointSize + 2.5, 0, 2 * Math.PI);
     context.fillStyle = '#141414';
     context.fill();
     context.strokeStyle = '#ffffff';
-    context.lineWidth = 3;
+    context.lineWidth = Math.max(1.5, lineWidth);
     context.stroke();
+    context.restore();
   }
 }
 
@@ -339,6 +375,7 @@ function drawSavedOverlays(
   savedOverlays: SavedPolygonOverlay[],
   lineOpacity: number,
   polygonOpacity: number,
+  lineWidth: number,
 ) {
   savedOverlays.forEach((overlay) => {
     if (overlay.effectivePoints.length < 2) {
@@ -361,7 +398,7 @@ function drawSavedOverlays(
     context.fill();
     context.globalAlpha = lineOpacity;
     context.strokeStyle = overlay.color;
-    context.lineWidth = 3;
+    context.lineWidth = lineWidth;
     context.stroke();
     context.restore();
 
@@ -396,7 +433,12 @@ function getPolygonCentroid(points: Point[]) {
   };
 }
 
-function drawRemovalRange(context: CanvasRenderingContext2D, layout: CanvasImageLayout, removalRange: RemovalRange | null) {
+function drawRemovalRange(
+  context: CanvasRenderingContext2D,
+  layout: CanvasImageLayout,
+  removalRange: RemovalRange | null,
+  lineWidth: number,
+) {
   if (!removalRange) {
     return;
   }
@@ -416,7 +458,7 @@ function drawRemovalRange(context: CanvasRenderingContext2D, layout: CanvasImage
   context.closePath();
   context.fillStyle = 'rgb(212 63 54 / 0.12)';
   context.strokeStyle = '#d43f36';
-  context.lineWidth = 2;
+  context.lineWidth = Math.max(1, lineWidth);
   context.fill();
   context.stroke();
 }

@@ -10,12 +10,16 @@ vi.mock('./components/ImageCanvas', () => ({
     pointOpacity,
     lineOpacity,
     polygonOpacity,
+    pointSize,
+    lineWidth,
+    showOriginalOnly,
     onCenterChange,
     onPointHover,
     onPointRadiusChange,
     onPointSelect,
     onPointerImageMove,
     onImageDrop,
+    onUploadRequest,
     removalRange,
   }: {
     center?: { x: number; y: number } | null;
@@ -24,6 +28,9 @@ vi.mock('./components/ImageCanvas', () => ({
     pointOpacity?: number;
     lineOpacity?: number;
     polygonOpacity?: number;
+    pointSize?: number;
+    lineWidth?: number;
+    showOriginalOnly?: boolean;
     removalRange?: { start: { x: number; y: number }; current: { x: number; y: number } } | null;
     onCenterChange: (point: { x: number; y: number }) => void;
     onPointHover?: (index: number | null) => void;
@@ -31,6 +38,7 @@ vi.mock('./components/ImageCanvas', () => ({
     onPointSelect?: (index: number | null) => void;
     onPointerImageMove?: (point: { x: number; y: number } | null) => void;
     onImageDrop?: (file: File) => void;
+    onUploadRequest?: () => void;
   }) => (
     <div>
       <span data-testid="mock-center">{center ? `${center.x},${center.y}` : 'none'}</span>
@@ -40,6 +48,8 @@ vi.mock('./components/ImageCanvas', () => ({
         {savedOverlays.map((overlay) => `${overlay.label}:${overlay.color}`).join('|')}
       </span>
       <span data-testid="mock-opacities">{`${pointOpacity}/${lineOpacity}/${polygonOpacity}`}</span>
+      <span data-testid="mock-sizes">{`${pointSize}/${lineWidth}`}</span>
+      <span data-testid="mock-original-preview">{showOriginalOnly ? 'on' : 'off'}</span>
       <span data-testid="mock-removal-range">
         {removalRange
           ? `${removalRange.start.x},${removalRange.start.y}-${removalRange.current.x},${removalRange.current.y}`
@@ -71,6 +81,9 @@ vi.mock('./components/ImageCanvas', () => ({
         onClick={() => onImageDrop?.(new File(['fake'], 'dropped-nucleus.png', { type: 'image/png' }))}
       >
         Mock image drop
+      </button>
+      <button type="button" onClick={() => onUploadRequest?.()}>
+        Mock upload request
       </button>
     </div>
   ),
@@ -105,6 +118,13 @@ describe('App', () => {
     render(<App />);
 
     expect(screen.getByLabelText(/upload image/i)).toBeInTheDocument();
+    expect(screen.queryByText(/Upload image/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Radial Gradient Tool/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Cell nucleus polygon/i)).not.toBeInTheDocument();
+    expect(screen.getByText(/Shortcuts/i)).toBeInTheDocument();
+    expect(screen.getByText(/S: save current annotation/i)).toBeInTheDocument();
+    expect(screen.getByText(/V: hold to preview original image/i)).toBeInTheDocument();
+    expect(screen.getByText(/Click to upload an image or drag & drop onto the canvas/i)).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: /detection/i })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: /view/i })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: /saved/i })).toBeInTheDocument();
@@ -113,12 +133,19 @@ describe('App', () => {
     expect(screen.getByLabelText(/max radius/i)).toBeInTheDocument();
     expect(screen.queryByLabelText(/step size/i)).not.toBeInTheDocument();
     expect(screen.getByLabelText(/outlier threshold/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/um per px/i)).toHaveValue(2.2);
     expect(screen.getByLabelText(/point opacity/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/line opacity/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/polygon opacity/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/point size/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/line width/i)).toBeInTheDocument();
+    expect(screen.getByText(/Avg Feret/i)).toBeInTheDocument();
+    expect(screen.queryByText(/^Vertices$/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/^Area px$/i)).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /save annotation/i })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /remove hovered point/i })).not.toBeInTheDocument();
-    expect(within(screen.getByLabelText(/saved annotations/i)).getByRole('button', { name: /export csv/i })).toBeInTheDocument();
+    expect(screen.queryByText(/Use \[ \/ \] to nudge/i)).not.toBeInTheDocument();
+    expect(within(screen.getByLabelText(/saved annotations/i)).getByRole('button', { name: /export xlsx/i })).toBeInTheDocument();
   });
 
   it('passes separate view opacity settings to the canvas', () => {
@@ -131,6 +158,31 @@ describe('App', () => {
     fireEvent.change(screen.getByLabelText(/polygon opacity/i), { target: { value: '0.25' } });
 
     expect(screen.getByTestId('mock-opacities')).toHaveTextContent('0.45/0.65/0.25');
+  });
+
+  it('passes adjustable point size and line width settings to the canvas', () => {
+    render(<App />);
+
+    expect(screen.getByTestId('mock-sizes')).toHaveTextContent('2.5/1.5');
+
+    fireEvent.change(screen.getByLabelText(/point size/i), { target: { value: '5' } });
+    fireEvent.change(screen.getByLabelText(/line width/i), { target: { value: '3' } });
+
+    expect(screen.getByTestId('mock-sizes')).toHaveTextContent('5/3');
+  });
+
+  it('shows the original image only while v is held', () => {
+    render(<App />);
+
+    expect(screen.getByTestId('mock-original-preview')).toHaveTextContent('off');
+
+    fireEvent.keyDown(window, { key: 'v', code: 'KeyV' });
+
+    expect(screen.getByTestId('mock-original-preview')).toHaveTextContent('on');
+
+    fireEvent.keyUp(window, { key: 'v', code: 'KeyV' });
+
+    expect(screen.getByTestId('mock-original-preview')).toHaveTextContent('off');
   });
 
   it('keeps the last threshold value after upload and center clicks', async () => {
@@ -164,6 +216,16 @@ describe('App', () => {
     });
   });
 
+  it('opens the file picker when the empty canvas requests upload', () => {
+    const inputClick = vi.spyOn(HTMLInputElement.prototype, 'click').mockImplementation(() => undefined);
+
+    render(<App />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Mock upload request' }));
+
+    expect(inputClick).toHaveBeenCalledTimes(1);
+  });
+
   it('saves the current annotation with s and shows its pixel area', async () => {
     render(<App />);
 
@@ -182,7 +244,8 @@ describe('App', () => {
       expect(screen.getByText(/Saved annotation 1/i)).toBeInTheDocument();
     });
     expect(within(screen.getByLabelText(/saved annotations/i)).getByText(/Annotation 1/i)).toBeInTheDocument();
-    expect(within(screen.getByLabelText(/saved annotations/i)).getByText(/Area:/i)).toBeInTheDocument();
+    expect(within(screen.getByLabelText(/saved annotations/i)).getByText(/Avg Feret:/i)).toBeInTheDocument();
+    expect(within(screen.getByLabelText(/saved annotations/i)).queryByText(/Area:/i)).not.toBeInTheDocument();
   });
 
   it('saves with the physical s key even when a slider is focused or the keyboard layout changes the key value', async () => {
@@ -320,7 +383,52 @@ describe('App', () => {
 
     expect(within(screen.getByLabelText(/saved annotations/i)).getByText(/No saved annotations/i)).toBeInTheDocument();
     expect(screen.getByTestId('mock-saved-overlays')).toHaveTextContent('0');
-    expect(within(screen.getByLabelText(/saved annotations/i)).getByRole('button', { name: /export csv/i })).toBeDisabled();
+    expect(within(screen.getByLabelText(/saved annotations/i)).getByRole('button', { name: /export xlsx/i })).toBeDisabled();
+  });
+
+  it('sends the working image, masks, and workbook to the dataset export server', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ folderName: '2026-06-11_17-30-22_nucleus' }),
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    vi.spyOn(HTMLCanvasElement.prototype, 'toDataURL').mockReturnValue('data:image/png;base64,canvas');
+    vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => undefined);
+
+    render(<App />);
+
+    fireEvent.change(screen.getByLabelText(/upload image/i), {
+      target: { files: [new File(['fake'], 'nucleus.png', { type: 'image/png' })] },
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText('Click the center of one round nucleus.')).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Mock canvas click' }));
+    fireEvent.keyDown(window, { key: 's', code: 'KeyS' });
+
+    await waitFor(() => {
+      expect(screen.getByText(/Saved annotation 1/i)).toBeInTheDocument();
+    });
+
+    fireEvent.click(within(screen.getByLabelText(/saved annotations/i)).getByRole('button', { name: /export xlsx/i }));
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith(
+        '/api/export-dataset',
+        expect.objectContaining({
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+        }),
+      );
+    });
+    const payload = JSON.parse(fetchMock.mock.calls[0][1].body);
+    expect(payload.imageFileName).toBe('nucleus.png');
+    expect(payload.imageDataUrl).toBe('data:image/png;base64,canvas');
+    expect(payload.xlsxDataUrl).toMatch(/^data:application\/vnd\.openxmlformats-officedocument\.spreadsheetml\.sheet;base64,/);
+    expect(payload.masks).toEqual([{ fileName: 'annotation_1.png', dataUrl: 'data:image/png;base64,canvas' }]);
+    expect(screen.getByText(/Dataset saved to 2026-06-11_17-30-22_nucleus/i)).toBeInTheDocument();
   });
 
   it('clears saved annotations when a new image is uploaded', async () => {
@@ -351,7 +459,7 @@ describe('App', () => {
       expect(within(screen.getByLabelText(/saved annotations/i)).getByText(/No saved annotations/i)).toBeInTheDocument();
     });
     expect(screen.getByTestId('mock-saved-overlays')).toHaveTextContent('0');
-    expect(within(screen.getByLabelText(/saved annotations/i)).getByRole('button', { name: /export csv/i })).toBeDisabled();
+    expect(within(screen.getByLabelText(/saved annotations/i)).getByRole('button', { name: /export xlsx/i })).toBeDisabled();
   });
 
   it('restores a saved annotation into the editor when edit is clicked', async () => {
@@ -423,14 +531,15 @@ describe('App', () => {
     fireEvent.keyDown(window, { key: 's' });
 
     await waitFor(() => {
-      expect(within(screen.getByLabelText(/saved annotations/i)).getByText('Area: 28 px')).toBeInTheDocument();
+      expect(within(screen.getByLabelText(/saved annotations/i)).getByText(/Avg Feret:/i)).toBeInTheDocument();
     });
+    const savedSummaryBeforeEdit = within(screen.getByLabelText(/saved annotations/i)).getByText(/Avg Feret:/i).textContent;
 
     fireEvent.click(screen.getByRole('button', { name: /edit annotation 1/i }));
     fireEvent.click(screen.getByRole('button', { name: 'Mock point drag' }));
 
     await waitFor(() => {
-      expect(within(screen.getByLabelText(/saved annotations/i)).queryByText('Area: 28 px')).not.toBeInTheDocument();
+      expect(within(screen.getByLabelText(/saved annotations/i)).getByText(/Avg Feret:/i).textContent).not.toBe(savedSummaryBeforeEdit);
     });
     expect(screen.queryByText(/Annotation 2/i)).not.toBeInTheDocument();
   });
@@ -595,7 +704,7 @@ describe('App', () => {
 
     expect(screen.queryByRole('button', { name: /increase selected point radius/i })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /decrease selected point radius/i })).not.toBeInTheDocument();
-    expect(screen.getByText(/Use \[ \/ \] to nudge/i)).toBeInTheDocument();
+    expect(screen.queryByText(/Use \[ \/ \] to nudge/i)).not.toBeInTheDocument();
   });
 
   it('shows why s did not save when no valid polygon exists', () => {

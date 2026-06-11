@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "start": "node server/index.mjs",
     "build": "tsc && vite build",
     "test": "vitest run",
     "test:watch": "vitest"
@@ -27,4 +28,3 @@
     "@types/react-dom": "latest"
   }
 }
-

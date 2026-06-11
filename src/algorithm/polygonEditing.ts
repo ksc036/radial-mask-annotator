@@ -8,6 +8,9 @@ export interface SavedAnnotation {
   id: number;
   center: Point;
   areaPixels: number;
+  feretAveragePixels: number;
+  feretMinPixels: number;
+  feretMaxPixels: number;
   vertexCount: number;
   excludedCount: number;
   visible: boolean;
@@ -97,16 +100,56 @@ export function calculatePolygonAreaPixels(points: Point[]): number {
   return Math.abs(doubledArea) / 2;
 }
 
-export function formatAnnotationsCsv(rows: SavedAnnotation[]) {
-  const header = 'id,center_x,center_y,area_pixels,vertex_count,excluded_count';
+export function calculateFeretPixels(points: Point[]) {
+  if (points.length < 2) {
+    return { average: 0, min: 0, max: 0 };
+  }
+
+  let max = 0;
+
+  points.forEach((point, index) => {
+    for (let otherIndex = index + 1; otherIndex < points.length; otherIndex += 1) {
+      max = Math.max(max, Math.hypot(point.x - points[otherIndex].x, point.y - points[otherIndex].y));
+    }
+  });
+
+  if (points.length === 2) {
+    return { average: max, min: max, max };
+  }
+
+  const min = points.reduce((currentMin, point, index) => {
+    const next = points[(index + 1) % points.length];
+    const edgeLength = Math.hypot(next.x - point.x, next.y - point.y);
+
+    if (edgeLength === 0) {
+      return currentMin;
+    }
+
+    const normal = {
+      x: -(next.y - point.y) / edgeLength,
+      y: (next.x - point.x) / edgeLength,
+    };
+    const projections = points.map((candidate) => candidate.x * normal.x + candidate.y * normal.y);
+    const width = Math.max(...projections) - Math.min(...projections);
+
+    return Math.min(currentMin, width);
+  }, Number.POSITIVE_INFINITY);
+  const finiteMin = Number.isFinite(min) ? min : 0;
+
+  return {
+    average: (max + finiteMin) / 2,
+    min: finiteMin,
+    max,
+  };
+}
+
+export function formatFeretMeasurementsCsv(rows: SavedAnnotation[], micronsPerPixel = 1) {
+  const header = 'Avg Feret (um),Min Feret (um),Feret max (um)';
   const body = rows.map((row) =>
     [
-      row.id,
-      formatNumber(row.center.x),
-      formatNumber(row.center.y),
-      Math.round(row.areaPixels),
-      row.vertexCount,
-      row.excludedCount,
+      formatNumber(row.feretAveragePixels * micronsPerPixel),
+      formatNumber(row.feretMinPixels * micronsPerPixel),
+      formatNumber(row.feretMaxPixels * micronsPerPixel),
     ].join(','),
   );
 

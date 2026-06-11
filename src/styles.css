@@ -66,22 +66,6 @@ select {
   background: #fbf8f1;
 }
 
-.eyebrow {
-  margin: 0 0 8px;
-  color: #6b6254;
-  font-size: 0.78rem;
-  font-weight: 700;
-  letter-spacing: 0;
-  text-transform: uppercase;
-}
-
-h1 {
-  margin: 0;
-  color: #17201a;
-  font-size: 2rem;
-  line-height: 1.05;
-}
-
 .control-section {
   display: grid;
   gap: 14px;
@@ -90,11 +74,33 @@ h1 {
 }
 
 .control-section h2,
-.saved-list h2 {
+.saved-list h2,
+.shortcut-panel h2 {
   margin: 0;
   color: #273129;
   font-size: 1rem;
   line-height: 1.2;
+}
+
+.shortcut-panel {
+  display: grid;
+  gap: 10px;
+}
+
+.shortcut-panel ul {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.shortcut-panel li,
+.shortcut-panel p {
+  margin: 0;
+  color: #4f564f;
+  font-size: 0.9rem;
+  line-height: 1.35;
 }
 
 .status-text {
@@ -111,24 +117,7 @@ h1 {
   line-height: 1.35;
 }
 
-.upload-control {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 46px;
-  border: 1px solid #1e2a22;
-  background: #1e2a22;
-  color: #ffffff;
-  cursor: pointer;
-}
-
-.upload-control span {
-  display: inline-flex;
-  align-items: center;
-  gap: 9px;
-}
-
-.upload-control input {
+.file-input {
   position: absolute;
   width: 1px;
   height: 1px;
@@ -161,11 +150,21 @@ output {
 }
 
 select,
-input[type='range'] {
+input[type='range'],
+input[type='number'] {
   width: 100%;
 }
 
 select {
+  min-height: 40px;
+  border: 1px solid #c8beab;
+  border-radius: 4px;
+  background: #ffffff;
+  color: #202922;
+  padding: 0 10px;
+}
+
+input[type='number'] {
   min-height: 40px;
   border: 1px solid #c8beab;
   border-radius: 4px;
@@ -246,12 +245,6 @@ input[type='range'] {
 .point-nudge span {
   color: #273129;
   font-size: 0.9rem;
-  font-weight: 700;
-}
-
-.nudge-hint {
-  color: #686154;
-  font-size: 0.82rem;
   font-weight: 700;
 }
 

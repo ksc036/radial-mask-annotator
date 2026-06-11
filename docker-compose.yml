@@ -1,0 +1,10 @@
+services:
+  radial-annotator:
+    build: .
+    ports:
+      - "4173:4173"
+    environment:
+      DATA_DIR: /data
+    volumes:
+      - ./data:/data
+    restart: unless-stopped

@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import type { BoundaryPoint, Point } from './radialBoundary';
 import {
+  calculateFeretPixels,
   calculatePolygonAreaPixels,
-  formatAnnotationsCsv,
+  formatFeretMeasurementsCsv,
   getEffectivePolygonPoints,
   markOutlierPoints,
   snapRadiusToNeighborAverage,
@@ -58,12 +59,28 @@ describe('polygon editing utilities', () => {
     ).toBe(100);
   });
 
-  it('formats saved annotations as CSV rows', () => {
+  it('calculates Feret max, min, and average from polygon points', () => {
+    const feret = calculateFeretPixels([
+      { x: 0, y: 0 },
+      { x: 10, y: 0 },
+      { x: 10, y: 4 },
+      { x: 0, y: 4 },
+    ]);
+
+    expect(feret.max).toBeCloseTo(Math.sqrt(116));
+    expect(feret.min).toBeCloseTo(4);
+    expect(feret.average).toBeCloseTo((Math.sqrt(116) + 4) / 2);
+  });
+
+  it('formats saved annotations as Feret-only measurement rows', () => {
     const rows: SavedAnnotation[] = [
       {
         id: 1,
         center: { x: 4.25, y: 8.75 },
         areaPixels: 123.4,
+        feretAveragePixels: 7.38,
+        feretMinPixels: 4,
+        feretMaxPixels: 10.77,
         vertexCount: 27,
         excludedCount: 5,
         visible: true,
@@ -78,7 +95,7 @@ describe('polygon editing utilities', () => {
       },
     ];
 
-    expect(formatAnnotationsCsv(rows)).toBe('id,center_x,center_y,area_pixels,vertex_count,excluded_count\n1,4.25,8.75,123,27,5');
+    expect(formatFeretMeasurementsCsv(rows, 2.2)).toBe('Avg Feret (um),Min Feret (um),Feret max (um)\n16.24,8.8,23.69');
   });
 
   it('snaps a dragged radius to the neighbor average when close enough', () => {

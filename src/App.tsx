@@ -1,11 +1,12 @@
-import { Download, Eye, EyeOff, Pencil, Trash2, Upload } from 'lucide-react';
-import { useEffect, useMemo, useState } from 'react';
+import { Download, Eye, EyeOff, Pencil, Trash2 } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { blobToDataUrl, createMaskPayloads, createWorkingImageDataUrl } from './algorithm/datasetPayload';
 import { rgbToGrayscale } from './algorithm/grayscale';
 import { getWorkingImageSize, wasImageResized } from './algorithm/imageProcessing';
 import {
+  calculateFeretPixels,
   calculatePolygonAreaPixels,
   distanceFromCenter,
-  formatAnnotationsCsv,
   getEffectivePolygonPoints,
   markOutlierPoints,
   snapRadiusToNeighborAverage,
@@ -13,6 +14,7 @@ import {
   type SavedAnnotation,
 } from './algorithm/polygonEditing';
 import { findRadialBoundary, type BoundaryPoint, type Point } from './algorithm/radialBoundary';
+import { createFeretMeasurementsXlsx, createMeasurementWorkbookFilename } from './algorithm/xlsxExport';
 import ImageCanvas from './components/ImageCanvas';
 
 const RAY_COUNTS = [16, 32, 64, 128];
@@ -26,16 +28,22 @@ interface RemovalRange {
 }
 
 export default function App() {
+  const uploadInputRef = useRef<HTMLInputElement | null>(null);
   const [image, setImage] = useState<HTMLImageElement | null>(null);
+  const [imageFileName, setImageFileName] = useState('image');
   const [grayscale, setGrayscale] = useState<Uint8ClampedArray | null>(null);
   const [center, setCenter] = useState<Point | null>(null);
   const [rayCount, setRayCount] = useState(32);
   const [threshold, setThreshold] = useState(24);
   const [maxRadius, setMaxRadius] = useState(120);
   const [outlierThreshold, setOutlierThreshold] = useState(35);
+  const [micronsPerPixel, setMicronsPerPixel] = useState(2.2);
   const [pointOpacity, setPointOpacity] = useState(0.25);
   const [lineOpacity, setLineOpacity] = useState(0.25);
   const [polygonOpacity, setPolygonOpacity] = useState(0.25);
+  const [pointSize, setPointSize] = useState(2.5);
+  const [lineWidth, setLineWidth] = useState(1.5);
+  const [showOriginalOnly, setShowOriginalOnly] = useState(false);
   const [editedRadii, setEditedRadii] = useState<Record<number, number>>({});
   const [manualExcludedIndices, setManualExcludedIndices] = useState<Set<number>>(() => new Set());
   const [hoveredPointIndex, setHoveredPointIndex] = useState<number | null>(null);
@@ -94,6 +102,7 @@ export default function App() {
   const excludedCount = autoExcludedIndices.size + manualExcludedIndices.size;
   const fallbackCount = effectivePolygon.filter((point) => point.fallback).length;
   const areaPixels = Math.round(calculatePolygonAreaPixels(effectivePolygon));
+  const feretPixels = useMemo(() => calculateFeretPixels(effectivePolygon), [effectivePolygon]);
 
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
@@ -119,6 +128,10 @@ export default function App() {
         event.preventDefault();
         moveCenterToPointer();
       }
+      if (isShortcutKey(event, 'KeyV', 'v')) {
+        event.preventDefault();
+        setShowOriginalOnly(true);
+      }
       if (isShortcutKey(event, 'Escape', 'escape')) {
         event.preventDefault();
         cancelCurrentEdit();
@@ -129,6 +142,10 @@ export default function App() {
       if (isShortcutKey(event, 'KeyR', 'r')) {
         event.preventDefault();
         finishRemovalRange();
+      }
+      if (isShortcutKey(event, 'KeyV', 'v')) {
+        event.preventDefault();
+        setShowOriginalOnly(false);
       }
     }
 
@@ -153,11 +170,12 @@ export default function App() {
       ),
     );
   }, [
-    activeEditingAnnotationId,
+      activeEditingAnnotationId,
     areaPixels,
-    center,
-    editedRadii,
-    effectivePolygon,
+      center,
+      editedRadii,
+      effectivePolygon,
+    feretPixels,
     excludedCount,
     manualExcludedIndices,
     maxRadius,
@@ -176,6 +194,10 @@ export default function App() {
     await loadImageFile(file);
   }
 
+  function requestImageUpload() {
+    uploadInputRef.current?.click();
+  }
+
   async function loadImageFile(file: File) {
     setSaveStatus('Loading image...');
 
@@ -187,6 +209,7 @@ export default function App() {
       const defaultMaxRadius = Math.round(Math.min(prepared.image.naturalWidth, prepared.image.naturalHeight) * 0.28);
 
       setImage(prepared.image);
+      setImageFileName(file.name);
       setGrayscale(gray);
       setCenter(null);
       setEditedRadii({});
@@ -206,6 +229,7 @@ export default function App() {
       setMaxRadius(defaultMaxRadius);
     } catch {
       setImage(null);
+      setImageFileName('image');
       setGrayscale(null);
       setCenter(null);
       setSaveStatus('Image failed to load. Try a smaller image or a different image format.');
@@ -410,6 +434,9 @@ export default function App() {
       id,
       center: { ...annotationCenter },
       areaPixels,
+      feretAveragePixels: feretPixels.average,
+      feretMinPixels: feretPixels.min,
+      feretMaxPixels: feretPixels.max,
       vertexCount: effectivePolygon.length,
       excludedCount,
       visible,
@@ -457,15 +484,37 @@ export default function App() {
     setSaveStatus(`Deleted annotation ${annotationId}.`);
   }
 
-  function exportCsv() {
-    const csv = formatAnnotationsCsv(savedAnnotations);
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const anchor = document.createElement('a');
-    anchor.href = url;
-    anchor.download = 'nucleus-annotations.csv';
-    anchor.click();
-    URL.revokeObjectURL(url);
+  async function exportXlsx() {
+    const blob = createFeretMeasurementsXlsx(savedAnnotations, micronsPerPixel);
+    downloadBlob(blob, createMeasurementWorkbookFilename(imageFileName));
+
+    if (!image) {
+      setSaveStatus('XLSX downloaded. No image is loaded for dataset export.');
+      return;
+    }
+
+    try {
+      const payload = {
+        imageFileName,
+        imageDataUrl: createWorkingImageDataUrl(image),
+        xlsxDataUrl: await blobToDataUrl(blob),
+        masks: createMaskPayloads(savedAnnotations, image.naturalWidth, image.naturalHeight),
+      };
+      const response = await fetch('/api/export-dataset', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+
+      if (!response.ok) {
+        throw new Error(`Dataset export failed with ${response.status}`);
+      }
+
+      const result = (await response.json()) as { folderName?: string };
+      setSaveStatus(result.folderName ? `Dataset saved to ${result.folderName}.` : 'Dataset saved.');
+    } catch {
+      setSaveStatus('XLSX downloaded, but dataset server save failed.');
+    }
   }
 
   function editSavedAnnotationById(annotationId: number) {
@@ -490,6 +539,9 @@ export default function App() {
             pointOpacity={pointOpacity}
             lineOpacity={lineOpacity}
             polygonOpacity={polygonOpacity}
+            pointSize={pointSize}
+            lineWidth={lineWidth}
+            showOriginalOnly={showOriginalOnly}
             hoveredPointIndex={hoveredPointIndex}
             savedOverlays={visibleSavedOverlays}
             removalRange={removalRange}
@@ -501,24 +553,34 @@ export default function App() {
             onSavedOverlayEdit={editSavedAnnotationById}
             onPointerImageMove={handlePointerImageMove}
             onImageDrop={loadImageFile}
+            onUploadRequest={requestImageUpload}
           />
         </div>
 
         <aside className="control-panel" aria-label="Controls">
-          <div>
-            <p className="eyebrow">Radial Gradient Tool</p>
-            <h1>Cell nucleus polygon</h1>
+          <section className="shortcut-panel" aria-labelledby="shortcut-heading">
+            <h2 id="shortcut-heading">Shortcuts</h2>
+            <ul>
+              <li>S: save current annotation</li>
+              <li>R: remove hovered point or drag range</li>
+              <li>C: move center to pointer</li>
+              <li>Esc: cancel current edit</li>
+              <li>V: hold to preview original image</li>
+              <li>[ / ]: move selected point</li>
+            </ul>
+            <p>Click to upload an image or drag & drop onto the canvas.</p>
             <p className="status-text">{getStatusText(Boolean(image), Boolean(center), fallbackCount)}</p>
             {saveStatus ? <p className="save-status">{saveStatus}</p> : null}
-          </div>
+          </section>
 
-          <label className="upload-control">
-            <span>
-              <Upload size={18} aria-hidden="true" />
-              Upload image
-            </span>
-            <input aria-label="Upload image" type="file" accept="image/*" onChange={handleUpload} />
-          </label>
+          <input
+            ref={uploadInputRef}
+            className="file-input"
+            aria-label="Upload image"
+            type="file"
+            accept="image/*"
+            onChange={handleUpload}
+          />
 
           <section className="control-section" aria-labelledby="detection-heading">
             <h2 id="detection-heading">Detection</h2>
@@ -591,30 +653,55 @@ export default function App() {
               value={polygonOpacity}
               onChange={setPolygonOpacity}
             />
+            <SliderField
+              id="point-size"
+              label="Point size"
+              min={1}
+              max={12}
+              step={0.5}
+              value={pointSize}
+              onChange={setPointSize}
+            />
+            <SliderField
+              id="line-width"
+              label="Line width"
+              min={0.5}
+              max={8}
+              step={0.5}
+              value={lineWidth}
+              onChange={setLineWidth}
+            />
 
             <div className="point-nudge" aria-label="Selected point controls">
               <span>{selectedPointIndex === null ? 'No point selected' : `Point ${selectedPointIndex + 1}`}</span>
-              <span className="nudge-hint">Use [ / ] to nudge</span>
             </div>
           </section>
 
           <dl className="metrics">
             <div>
-              <dt>Vertices</dt>
-              <dd>{effectivePolygon.length}</dd>
-            </div>
-            <div>
-              <dt>Area px</dt>
-              <dd>{areaPixels}</dd>
+              <dt>Avg Feret um</dt>
+              <dd>{formatMeasurement(feretPixels.average * micronsPerPixel)}</dd>
             </div>
           </dl>
+
+          <section className="control-section" aria-labelledby="measurement-heading">
+            <h2 id="measurement-heading">Measurement</h2>
+            <NumberField
+              id="microns-per-pixel"
+              label="um per px"
+              min={0}
+              step={0.1}
+              value={micronsPerPixel}
+              onChange={setMicronsPerPixel}
+            />
+          </section>
 
           <section className="saved-list" aria-label="Saved annotations">
             <div className="saved-header">
               <h2>Saved</h2>
-              <button className="secondary-action compact-action" type="button" onClick={exportCsv} disabled={savedAnnotations.length === 0}>
+              <button className="secondary-action compact-action" type="button" onClick={exportXlsx} disabled={savedAnnotations.length === 0}>
                 <Download size={16} aria-hidden="true" />
-                Export CSV
+                Export XLSX
               </button>
             </div>
             {savedAnnotations.length === 0 ? (
@@ -628,7 +715,7 @@ export default function App() {
                         <span className="saved-color" style={{ background: getAnnotationColor(annotation.id) }} aria-hidden="true" />
                         Annotation {annotation.id}
                       </strong>
-                      <span>Area: {Math.round(annotation.areaPixels)} px</span>
+                      <span>Avg Feret: {formatMeasurement(annotation.feretAveragePixels * micronsPerPixel)} um</span>
                     </div>
                     <div className="saved-actions">
                       <button
@@ -706,6 +793,36 @@ function SliderField({
   );
 }
 
+function NumberField({
+  id,
+  label,
+  min,
+  step,
+  value,
+  onChange,
+}: {
+  id: string;
+  label: string;
+  min: number;
+  step: number;
+  value: number;
+  onChange: (value: number) => void;
+}) {
+  return (
+    <div className="field">
+      <label htmlFor={id}>{label}</label>
+      <input
+        id={id}
+        type="number"
+        min={min}
+        step={step}
+        value={value}
+        onChange={(event) => onChange(Math.max(min, Number(event.target.value) || min))}
+      />
+    </div>
+  );
+}
+
 function getPointIndicesInRange(points: BoundaryPoint[], range: RemovalRange) {
   const minX = Math.min(range.start.x, range.current.x);
   const maxX = Math.max(range.start.x, range.current.x);
@@ -723,7 +840,7 @@ function getAnnotationColor(annotationId: number) {
 
 function getStatusText(hasImage: boolean, hasCenter: boolean, fallbackCount: number) {
   if (!hasImage) {
-    return 'Upload a color microscopy image.';
+    return 'Click to upload or drag & drop image to begin.';
   }
 
   if (!hasCenter) {
@@ -739,6 +856,19 @@ function getStatusText(hasImage: boolean, hasCenter: boolean, fallbackCount: num
 
 function isShortcutKey(event: KeyboardEvent, code: string, key: string) {
   return event.code === code || event.key.toLowerCase() === key;
+}
+
+function formatMeasurement(value: number) {
+  return Number.isInteger(value) ? String(value) : value.toFixed(2).replace(/0+$/, '').replace(/\.$/, '');
+}
+
+function downloadBlob(blob: Blob, filename: string) {
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download = filename;
+  anchor.click();
+  URL.revokeObjectURL(url);
 }
 
 function loadImage(file: File) {
