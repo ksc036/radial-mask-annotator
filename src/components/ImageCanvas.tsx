@@ -14,8 +14,10 @@ interface ImageCanvasProps {
   hoveredPointIndex: number | null;
   onCenterChange: (point: Point) => void;
   onPointHover: (index: number | null) => void;
+  onPointSelect: (index: number | null) => void;
   onPointRadiusChange: (index: number, radius: number) => void;
   onPointToggleExcluded: (index: number) => void;
+  onSavedOverlayEdit: (id: number) => void;
 }
 
 interface SavedPolygonOverlay {
@@ -35,8 +37,10 @@ export default function ImageCanvas({
   hoveredPointIndex,
   onCenterChange,
   onPointHover,
+  onPointSelect,
   onPointRadiusChange,
   onPointToggleExcluded,
+  onSavedOverlayEdit,
 }: ImageCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const [draggedPointIndex, setDraggedPointIndex] = useState<number | null>(null);
@@ -83,11 +87,19 @@ export default function ImageCanvas({
       if (autoExcludedIndices.has(nearestPointIndex) || manualExcludedIndices.has(nearestPointIndex)) {
         onPointToggleExcluded(nearestPointIndex);
         onPointHover(nearestPointIndex);
+        onPointSelect(nearestPointIndex);
         setDraggedPointIndex(nearestPointIndex);
         return;
       }
       setDraggedPointIndex(nearestPointIndex);
       onPointHover(nearestPointIndex);
+      onPointSelect(nearestPointIndex);
+      return;
+    }
+
+    const savedOverlayId = findSavedOverlayAtPoint(canvasPoint, layout, savedOverlays);
+    if (savedOverlayId !== null) {
+      onSavedOverlayEdit(savedOverlayId);
       return;
     }
 
@@ -311,4 +323,70 @@ function findNearestPointIndex(point: Point, layout: CanvasImageLayout, points: 
   });
 
   return nearestIndex;
+}
+
+function findSavedOverlayAtPoint(point: Point, layout: CanvasImageLayout, savedOverlays: SavedPolygonOverlay[]) {
+  for (let index = savedOverlays.length - 1; index >= 0; index -= 1) {
+    const overlay = savedOverlays[index];
+    const canvasPoints = overlay.effectivePoints.map((candidate) => imageToCanvasPoint(candidate, layout));
+
+    if (isPointNearPolygon(point, canvasPoints, 10) || isPointInsidePolygon(point, canvasPoints)) {
+      return overlay.id;
+    }
+  }
+
+  return null;
+}
+
+function isPointNearPolygon(point: Point, polygon: Point[], threshold: number) {
+  if (polygon.length < 2) {
+    return false;
+  }
+
+  return polygon.some((candidate, index) => {
+    const next = polygon[(index + 1) % polygon.length];
+    return distanceToSegment(point, candidate, next) <= threshold;
+  });
+}
+
+function distanceToSegment(point: Point, start: Point, end: Point) {
+  const segmentX = end.x - start.x;
+  const segmentY = end.y - start.y;
+  const segmentLengthSquared = segmentX * segmentX + segmentY * segmentY;
+
+  if (segmentLengthSquared === 0) {
+    return Math.hypot(point.x - start.x, point.y - start.y);
+  }
+
+  const projection = Math.max(
+    0,
+    Math.min(1, ((point.x - start.x) * segmentX + (point.y - start.y) * segmentY) / segmentLengthSquared),
+  );
+  const closest = {
+    x: start.x + projection * segmentX,
+    y: start.y + projection * segmentY,
+  };
+
+  return Math.hypot(point.x - closest.x, point.y - closest.y);
+}
+
+function isPointInsidePolygon(point: Point, polygon: Point[]) {
+  if (polygon.length < 3) {
+    return false;
+  }
+
+  let inside = false;
+
+  for (let index = 0, previousIndex = polygon.length - 1; index < polygon.length; previousIndex = index, index += 1) {
+    const current = polygon[index];
+    const previous = polygon[previousIndex];
+    const crossesY = current.y > point.y !== previous.y > point.y;
+    const xAtY = ((previous.x - current.x) * (point.y - current.y)) / (previous.y - current.y) + current.x;
+
+    if (crossesY && point.x < xAtY) {
+      inside = !inside;
+    }
+  }
+
+  return inside;
 }

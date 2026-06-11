@@ -10,6 +10,7 @@ vi.mock('./components/ImageCanvas', () => ({
     onCenterChange,
     onPointHover,
     onPointRadiusChange,
+    onPointSelect,
   }: {
     center?: { x: number; y: number } | null;
     points?: Array<unknown>;
@@ -17,6 +18,7 @@ vi.mock('./components/ImageCanvas', () => ({
     onCenterChange: (point: { x: number; y: number }) => void;
     onPointHover?: (index: number | null) => void;
     onPointRadiusChange?: (index: number, radius: number) => void;
+    onPointSelect?: (index: number | null) => void;
   }) => (
     <div>
       <span data-testid="mock-center">{center ? `${center.x},${center.y}` : 'none'}</span>
@@ -30,6 +32,9 @@ vi.mock('./components/ImageCanvas', () => ({
       </button>
       <button type="button" onClick={() => onPointHover?.(0)}>
         Mock point hover
+      </button>
+      <button type="button" onClick={() => onPointSelect?.(0)}>
+        Mock point select
       </button>
     </div>
   ),
@@ -290,6 +295,32 @@ describe('App', () => {
     fireEvent.click(removeButton);
 
     expect(screen.getByText(/Hover a radial point before pressing r/i)).toBeInTheDocument();
+  });
+
+  it('nudges the selected radial point with plus and minus buttons', async () => {
+    render(<App />);
+
+    fireEvent.change(screen.getByLabelText(/upload image/i), {
+      target: { files: [new File(['fake'], 'nucleus.png', { type: 'image/png' })] },
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText('Click the center of one round nucleus.')).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Mock canvas click' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Mock point select' }));
+    fireEvent.click(screen.getByRole('button', { name: /increase selected point radius/i }));
+
+    await waitFor(() => {
+      expect(screen.getByText('Moved point 1 outward.')).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: /decrease selected point radius/i }));
+
+    await waitFor(() => {
+      expect(screen.getByText('Moved point 1 inward.')).toBeInTheDocument();
+    });
   });
 
   it('shows why s did not save when no valid polygon exists', () => {

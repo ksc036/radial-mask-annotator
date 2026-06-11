@@ -185,6 +185,10 @@ Each saved annotation has a visual toggle. Turning visual off hides only that sa
 
 Each saved annotation also has an edit action. Editing restores that annotation's center, ray settings, threshold settings, manually edited radii, and manually excluded points into the active editor. The edited saved overlay is hidden while it is loaded into the editor so the current editable polygon does not visually overlap its saved copy.
 
+Saved annotation overlays are directly interactive on the image. Touching or clicking a visible saved overlay opens that annotation in the editor, matching the explicit edit button in the saved list.
+
+Clicking a radial endpoint selects it for fine adjustment. The selected endpoint can be nudged inward or outward with `-` and `+` buttons, moving the endpoint along its original ray by one pixel per click without applying neighbor snap.
+
 ### CSV Export
 
 Add CSV export for saved annotations. The MVP columns are:

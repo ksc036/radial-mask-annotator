@@ -1,8 +1,12 @@
-import { fireEvent, render, screen } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import ImageCanvas from './ImageCanvas';
 
 describe('ImageCanvas', () => {
+  afterEach(() => {
+    cleanup();
+  });
+
   it('restores an excluded radial point and starts dragging it from the same pointer action', () => {
     const onPointToggleExcluded = vi.fn();
     const onPointRadiusChange = vi.fn();
@@ -21,8 +25,10 @@ describe('ImageCanvas', () => {
         savedOverlays={[]}
         onCenterChange={vi.fn()}
         onPointHover={vi.fn()}
+        onPointSelect={vi.fn()}
         onPointRadiusChange={onPointRadiusChange}
         onPointToggleExcluded={onPointToggleExcluded}
+        onSavedOverlayEdit={vi.fn()}
       />,
     );
 
@@ -44,5 +50,59 @@ describe('ImageCanvas', () => {
 
     expect(onPointToggleExcluded).toHaveBeenCalledWith(0);
     expect(onPointRadiusChange).toHaveBeenCalledWith(0, 20);
+  });
+
+  it('opens a saved annotation for editing when its overlay is touched', () => {
+    const onSavedOverlayEdit = vi.fn();
+    const onCenterChange = vi.fn();
+    const image = { naturalWidth: 100, naturalHeight: 100 } as HTMLImageElement;
+
+    render(
+      <ImageCanvas
+        image={image}
+        center={null}
+        points={[]}
+        effectivePoints={[]}
+        autoExcludedIndices={new Set()}
+        manualExcludedIndices={new Set()}
+        pointOpacity={0.85}
+        hoveredPointIndex={null}
+        savedOverlays={[
+          {
+            id: 7,
+            effectivePoints: [
+              { index: 0, x: 40, y: 40, angle: 0, fallback: false, gradient: 10 },
+              { index: 1, x: 60, y: 40, angle: 0, fallback: false, gradient: 10 },
+              { index: 2, x: 60, y: 60, angle: 0, fallback: false, gradient: 10 },
+              { index: 3, x: 40, y: 60, angle: 0, fallback: false, gradient: 10 },
+            ],
+          },
+        ]}
+        onCenterChange={onCenterChange}
+        onPointHover={vi.fn()}
+        onPointSelect={vi.fn()}
+        onPointRadiusChange={vi.fn()}
+        onPointToggleExcluded={vi.fn()}
+        onSavedOverlayEdit={onSavedOverlayEdit}
+      />,
+    );
+
+    const canvas = screen.getByLabelText('Image annotation canvas') as HTMLCanvasElement;
+    vi.spyOn(canvas, 'getBoundingClientRect').mockReturnValue({
+      x: 0,
+      y: 0,
+      top: 0,
+      left: 0,
+      bottom: 820,
+      right: 1200,
+      width: 1200,
+      height: 820,
+      toJSON: () => ({}),
+    } as DOMRect);
+
+    fireEvent.pointerDown(canvas, { clientX: 600, clientY: 410 });
+
+    expect(onSavedOverlayEdit).toHaveBeenCalledWith(7);
+    expect(onCenterChange).not.toHaveBeenCalled();
   });
 });

@@ -1,9 +1,10 @@
-import { Download, Eye, EyeOff, Pencil, Save, Upload } from 'lucide-react';
+import { Download, Eye, EyeOff, Minus, Pencil, Plus, Save, Upload } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { rgbToGrayscale } from './algorithm/grayscale';
 import { getWorkingImageSize, wasImageResized } from './algorithm/imageProcessing';
 import {
   calculatePolygonAreaPixels,
+  distanceFromCenter,
   formatAnnotationsCsv,
   getEffectivePolygonPoints,
   markOutlierPoints,
@@ -30,6 +31,7 @@ export default function App() {
   const [editedRadii, setEditedRadii] = useState<Record<number, number>>({});
   const [manualExcludedIndices, setManualExcludedIndices] = useState<Set<number>>(() => new Set());
   const [hoveredPointIndex, setHoveredPointIndex] = useState<number | null>(null);
+  const [selectedPointIndex, setSelectedPointIndex] = useState<number | null>(null);
   const [savedAnnotations, setSavedAnnotations] = useState<SavedAnnotation[]>([]);
   const [saveStatus, setSaveStatus] = useState('');
 
@@ -112,9 +114,10 @@ export default function App() {
       setGrayscale(gray);
       setCenter(null);
       setEditedRadii({});
-      setManualExcludedIndices(new Set());
-      setHoveredPointIndex(null);
-      setSaveStatus(
+    setManualExcludedIndices(new Set());
+    setHoveredPointIndex(null);
+    setSelectedPointIndex(null);
+    setSaveStatus(
         prepared.resized
           ? `Large image resized to ${prepared.image.naturalWidth} x ${prepared.image.naturalHeight} for stable editing.`
           : '',
@@ -133,6 +136,7 @@ export default function App() {
     setEditedRadii({});
     setManualExcludedIndices(new Set());
     setHoveredPointIndex(null);
+    setSelectedPointIndex(null);
     setSaveStatus('');
   }
 
@@ -143,6 +147,19 @@ export default function App() {
 
     const snappedRadius = snapRadiusToNeighborAverage(polygon, center, index, radius, RADIUS_SNAP_THRESHOLD);
     setEditedRadii((current) => ({ ...current, [index]: snappedRadius }));
+  }
+
+  function nudgeSelectedPoint(delta: number) {
+    if (!center || selectedPointIndex === null || !polygon[selectedPointIndex]) {
+      setSaveStatus('Select a radial point before using + or -.');
+      return;
+    }
+
+    const currentRadius = distanceFromCenter(polygon[selectedPointIndex], center);
+    const nextRadius = Math.max(0, currentRadius + delta);
+
+    setEditedRadii((current) => ({ ...current, [selectedPointIndex]: nextRadius }));
+    setSaveStatus(`Moved point ${selectedPointIndex + 1} ${delta > 0 ? 'outward' : 'inward'}.`);
   }
 
   function toggleHoveredExclusion() {
@@ -221,6 +238,7 @@ export default function App() {
     setEditedRadii({ ...annotation.editedRadii });
     setManualExcludedIndices(new Set(annotation.manualExcludedIndices));
     setHoveredPointIndex(null);
+    setSelectedPointIndex(null);
     setSavedAnnotations((current) =>
       current.map((item) => (item.id === annotation.id ? { ...item, visible: false } : item)),
     );
@@ -236,6 +254,14 @@ export default function App() {
     anchor.download = 'nucleus-annotations.csv';
     anchor.click();
     URL.revokeObjectURL(url);
+  }
+
+  function editSavedAnnotationById(annotationId: number) {
+    const annotation = savedAnnotations.find((item) => item.id === annotationId);
+
+    if (annotation) {
+      editSavedAnnotation(annotation);
+    }
   }
 
   return (
@@ -254,8 +280,10 @@ export default function App() {
             savedOverlays={visibleSavedOverlays}
             onCenterChange={handleCenterChange}
             onPointHover={setHoveredPointIndex}
+            onPointSelect={setSelectedPointIndex}
             onPointRadiusChange={handlePointRadiusChange}
             onPointToggleExcluded={togglePointExclusion}
+            onSavedOverlayEdit={editSavedAnnotationById}
           />
         </div>
 
@@ -323,6 +351,30 @@ export default function App() {
             value={pointOpacity}
             onChange={setPointOpacity}
           />
+
+          <div className="point-nudge" aria-label="Selected point controls">
+            <span>{selectedPointIndex === null ? 'No point selected' : `Point ${selectedPointIndex + 1}`}</span>
+            <div className="nudge-actions">
+              <button
+                className="icon-action"
+                type="button"
+                onClick={() => nudgeSelectedPoint(-1)}
+                aria-label="Decrease selected point radius"
+                title="Move point inward"
+              >
+                <Minus size={16} aria-hidden="true" />
+              </button>
+              <button
+                className="icon-action"
+                type="button"
+                onClick={() => nudgeSelectedPoint(1)}
+                aria-label="Increase selected point radius"
+                title="Move point outward"
+              >
+                <Plus size={16} aria-hidden="true" />
+              </button>
+            </div>
+          </div>
 
           <div className="button-row">
             <button className="secondary-action" type="button" onClick={saveCurrentAnnotation}>
