@@ -116,6 +116,8 @@ The app should handle these states clearly:
 - Center selected but rays produce fallback endpoints.
 - Controls changed before a center exists.
 
+Large compressed images can decode into much larger pixel buffers than their file size suggests. The app should cap the working image to a bounded pixel budget before calling `getImageData`, and it should show a visible message when an image is resized for stable editing.
+
 ## Testing
 
 Algorithm tests should drive the implementation first:

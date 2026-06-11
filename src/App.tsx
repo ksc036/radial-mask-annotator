@@ -1,6 +1,7 @@
 import { Download, Eye, EyeOff, Pencil, Upload } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { rgbToGrayscale } from './algorithm/grayscale';
+import { getWorkingImageSize, wasImageResized } from './algorithm/imageProcessing';
 import {
   calculatePolygonAreaPixels,
   formatAnnotationsCsv,
@@ -98,19 +99,33 @@ export default function App() {
       return;
     }
 
-    const loadedImage = await loadImage(file);
-    const imageData = readImageData(loadedImage);
-    const gray = rgbToGrayscale(imageData.data, loadedImage.naturalWidth, loadedImage.naturalHeight);
-    const defaultMaxRadius = Math.round(Math.min(loadedImage.naturalWidth, loadedImage.naturalHeight) * 0.28);
+    setSaveStatus('Loading image...');
 
-    setImage(loadedImage);
-    setGrayscale(gray);
-    setCenter(null);
-    setEditedRadii({});
-    setManualExcludedIndices(new Set());
-    setHoveredPointIndex(null);
-    setSaveStatus('');
-    setMaxRadius(defaultMaxRadius);
+    try {
+      const loadedImage = await loadImage(file);
+      const prepared = await prepareUploadedImage(loadedImage);
+      const imageData = readImageData(prepared.image);
+      const gray = rgbToGrayscale(imageData.data, prepared.image.naturalWidth, prepared.image.naturalHeight);
+      const defaultMaxRadius = Math.round(Math.min(prepared.image.naturalWidth, prepared.image.naturalHeight) * 0.28);
+
+      setImage(prepared.image);
+      setGrayscale(gray);
+      setCenter(null);
+      setEditedRadii({});
+      setManualExcludedIndices(new Set());
+      setHoveredPointIndex(null);
+      setSaveStatus(
+        prepared.resized
+          ? `Large image resized to ${prepared.image.naturalWidth} x ${prepared.image.naturalHeight} for stable editing.`
+          : '',
+      );
+      setMaxRadius(defaultMaxRadius);
+    } catch {
+      setImage(null);
+      setGrayscale(null);
+      setCenter(null);
+      setSaveStatus('Image failed to load. Try a smaller image or a different image format.');
+    }
   }
 
   function handleCenterChange(nextCenter: Point) {
@@ -440,6 +455,67 @@ function loadImage(file: File) {
       reject(new Error('Image failed to load.'));
     };
     image.src = objectUrl;
+  });
+}
+
+async function prepareUploadedImage(image: HTMLImageElement) {
+  const originalSize = { width: image.naturalWidth, height: image.naturalHeight };
+  const workingSize = getWorkingImageSize(originalSize);
+
+  if (!wasImageResized(originalSize, workingSize)) {
+    return { image, resized: false };
+  }
+
+  const canvas = document.createElement('canvas');
+  canvas.width = workingSize.width;
+  canvas.height = workingSize.height;
+
+  const context = canvas.getContext('2d');
+
+  if (!context) {
+    throw new Error('Canvas is not available.');
+  }
+
+  context.drawImage(image, 0, 0, workingSize.width, workingSize.height);
+
+  return {
+    image: await loadCanvasImage(canvas),
+    resized: true,
+  };
+}
+
+function loadCanvasImage(canvas: HTMLCanvasElement) {
+  return new Promise<HTMLImageElement>((resolve, reject) => {
+    const image = new Image();
+    let objectUrl: string | null = null;
+
+    image.onload = () => {
+      if (objectUrl) {
+        URL.revokeObjectURL(objectUrl);
+      }
+      resolve(image);
+    };
+    image.onerror = () => {
+      if (objectUrl) {
+        URL.revokeObjectURL(objectUrl);
+      }
+      reject(new Error('Resized image failed to load.'));
+    };
+
+    if (canvas.toBlob) {
+      canvas.toBlob((blob) => {
+        if (!blob) {
+          reject(new Error('Canvas export failed.'));
+          return;
+        }
+
+        objectUrl = URL.createObjectURL(blob);
+        image.src = objectUrl;
+      }, 'image/png');
+      return;
+    }
+
+    image.src = canvas.toDataURL('image/png');
   });
 }
 
