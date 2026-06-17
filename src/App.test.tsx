@@ -179,6 +179,20 @@ describe('App', () => {
     expect(screen.getByTestId('mock-sizes')).toHaveTextContent('5/3');
   });
 
+  it('allows clearing the um per px input while editing', () => {
+    render(<App />);
+
+    const micronsInput = screen.getByLabelText(/um per px/i);
+
+    fireEvent.change(micronsInput, { target: { value: '' } });
+
+    expect(micronsInput).toHaveValue(null);
+
+    fireEvent.change(micronsInput, { target: { value: '1.5' } });
+
+    expect(micronsInput).toHaveValue(1.5);
+  });
+
   it('shows the original image only while v is held', () => {
     render(<App />);
 

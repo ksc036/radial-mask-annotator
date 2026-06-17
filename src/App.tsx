@@ -928,6 +928,12 @@ function NumberField({
   value: number;
   onChange: (value: number) => void;
 }) {
+  const [draftValue, setDraftValue] = useState(String(value));
+
+  useEffect(() => {
+    setDraftValue(String(value));
+  }, [value]);
+
   return (
     <div className="field">
       <label htmlFor={id}>{label}</label>
@@ -936,8 +942,26 @@ function NumberField({
         type="number"
         min={min}
         step={step}
-        value={value}
-        onChange={(event) => onChange(Math.max(min, Number(event.target.value) || min))}
+        value={draftValue}
+        onChange={(event) => {
+          const nextValue = event.target.value;
+          setDraftValue(nextValue);
+
+          if (nextValue === '') {
+            return;
+          }
+
+          const numericValue = Number(nextValue);
+
+          if (Number.isFinite(numericValue)) {
+            onChange(Math.max(min, numericValue));
+          }
+        }}
+        onBlur={() => {
+          if (draftValue === '' || !Number.isFinite(Number(draftValue))) {
+            setDraftValue(String(value));
+          }
+        }}
       />
     </div>
   );
