@@ -117,10 +117,12 @@ docker compose config
 
 ## 저장 API
 
-이미지 업로드 시점에 앱은 `POST /api/upload-image`로 다음 데이터를 보냅니다.
+이미지 업로드 시점에 앱은 `POST /api/upload-image-file`로 이미지 바이트를 직접 보냅니다. 일반 이미지는 편집 화면과 mask 크기를 맞추기 위해 working PNG blob으로 저장하고, TIFF 이미지는 원본 `.tif/.tiff` 바이트를 그대로 저장하면서 preview용 PNG data URL만 응답으로 받습니다.
 
-- `imageFileName`
-- `imageDataUrl`
+요청 헤더:
+
+- `Content-Type: application/octet-stream`
+- `X-Filename`
 
 서버는 이 시점에 `DATA_DIR` 아래에 timestamp/image-name 폴더를 만들고 `image/`와 `masks/` 폴더를 생성합니다.
 

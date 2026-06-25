@@ -1,6 +1,6 @@
 import { Download, Eye, EyeOff, Pencil, Trash2 } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { createMaskPayloads, createWorkingImageDataUrl } from './algorithm/datasetPayload';
+import { createMaskPayloads } from './algorithm/datasetPayload';
 import { rgbToGrayscale } from './algorithm/grayscale';
 import { getWorkingImageSize, wasImageResized } from './algorithm/imageProcessing';
 import {
@@ -278,13 +278,13 @@ export default function App() {
   }
 
   async function uploadWorkingImage(fileName: string, workingImage: HTMLImageElement) {
-    const response = await fetch('/api/upload-image', {
+    const response = await fetch('/api/upload-image-file', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        imageFileName: fileName,
-        imageDataUrl: createWorkingImageDataUrl(workingImage),
-      }),
+      headers: {
+        'Content-Type': 'application/octet-stream',
+        'X-Filename': getWorkingImageUploadFilename(fileName),
+      },
+      body: await createWorkingImageBlob(workingImage),
     });
 
     if (!response.ok) {
@@ -1038,6 +1038,45 @@ function loadBrowserImage(file: File) {
     };
     image.src = objectUrl;
   });
+}
+
+function createWorkingImageBlob(image: HTMLImageElement) {
+  const canvas = document.createElement('canvas');
+  canvas.width = image.naturalWidth;
+  canvas.height = image.naturalHeight;
+
+  const context = canvas.getContext('2d');
+
+  if (!context) {
+    throw new Error('Canvas is not available.');
+  }
+
+  context.drawImage(image, 0, 0, image.naturalWidth, image.naturalHeight);
+
+  return canvasToBlob(canvas, 'image/png');
+}
+
+function canvasToBlob(canvas: HTMLCanvasElement, type: string) {
+  return new Promise<Blob>((resolve, reject) => {
+    if (!canvas.toBlob) {
+      reject(new Error('Canvas blob export is not available.'));
+      return;
+    }
+
+    canvas.toBlob((blob) => {
+      if (!blob) {
+        reject(new Error('Canvas export failed.'));
+        return;
+      }
+
+      resolve(blob);
+    }, type);
+  });
+}
+
+function getWorkingImageUploadFilename(fileName: string) {
+  const baseName = fileName.replace(/\.[^.]+$/, '') || 'image';
+  return `${baseName}.png`;
 }
 
 async function prepareUploadedImage(image: HTMLImageElement) {

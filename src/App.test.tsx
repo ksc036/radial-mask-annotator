@@ -100,6 +100,9 @@ describe('App', () => {
   beforeEach(() => {
     vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:test-image');
     vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => undefined);
+    vi.spyOn(HTMLCanvasElement.prototype, 'toBlob').mockImplementation((callback) => {
+      callback(new Blob(['canvas'], { type: 'image/png' }));
+    });
 
     globalThis.Image = class {
       naturalWidth = 10;
@@ -238,13 +241,15 @@ describe('App', () => {
     });
   });
 
-  it('uploads the working image to the dataset server when an image is loaded', async () => {
+  it('uploads the working image as binary data when an image is loaded', async () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
       json: async () => ({ folderName: '2026-06-11_17-30-22_nucleus' }),
     });
     vi.stubGlobal('fetch', fetchMock);
-    vi.spyOn(HTMLCanvasElement.prototype, 'toDataURL').mockReturnValue('data:image/png;base64,canvas');
+    vi.spyOn(HTMLCanvasElement.prototype, 'toBlob').mockImplementation((callback) => {
+      callback(new Blob(['working png'], { type: 'image/png' }));
+    });
 
     render(<App />);
 
@@ -254,17 +259,16 @@ describe('App', () => {
 
     await waitFor(() => {
       expect(fetchMock).toHaveBeenCalledWith(
-        '/api/upload-image',
+        '/api/upload-image-file',
         expect.objectContaining({
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: {
+            'Content-Type': 'application/octet-stream',
+            'X-Filename': 'nucleus.png',
+          },
+          body: expect.any(Blob),
         }),
       );
-    });
-    const payload = JSON.parse(fetchMock.mock.calls[0][1].body);
-    expect(payload).toEqual({
-      imageFileName: 'nucleus.png',
-      imageDataUrl: 'data:image/png;base64,canvas',
     });
     expect(screen.getByText(/Image saved to 2026-06-11_17-30-22_nucleus/i)).toBeInTheDocument();
   });
@@ -499,7 +503,7 @@ describe('App', () => {
     });
 
     await waitFor(() => {
-      expect(fetchMock).toHaveBeenCalledWith('/api/upload-image', expect.any(Object));
+      expect(fetchMock).toHaveBeenCalledWith('/api/upload-image-file', expect.any(Object));
     });
     fetchMock.mockClear();
 
