@@ -15,7 +15,7 @@ import {
   type SavedAnnotation,
 } from './algorithm/polygonEditing';
 import { findRadialBoundary, type BoundaryPoint, type Point } from './algorithm/radialBoundary';
-import { decodeTiffFileToImage, isTiffFile, uploadTiffFileToServer } from './algorithm/tiffImage';
+import { decodeTiffFileToImage, isTiffFile, isTiffImageFile, uploadTiffFileToServer } from './algorithm/tiffImage';
 import { createFeretMeasurementsXlsx, createMeasurementWorkbookFilename } from './algorithm/xlsxExport';
 import ImageCanvas from './components/ImageCanvas';
 
@@ -218,7 +218,7 @@ export default function App() {
     setSaveStatus('Loading image...');
 
     try {
-      const uploadedTiff = isTiffFile(file) ? await uploadTiffFileToServer(file) : null;
+      const uploadedTiff = (await isTiffImageFile(file)) ? await uploadTiffFileToServer(file) : null;
       const loadedImage = uploadedTiff?.image ?? (await loadImage(file));
       const prepared = await prepareUploadedImage(loadedImage);
       const imageData = readImageData(prepared.image);

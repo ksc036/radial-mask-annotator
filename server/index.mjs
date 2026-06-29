@@ -4,7 +4,7 @@ import { createServer } from 'node:http';
 import { extname, join, normalize, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { saveDatasetImage, saveDatasetImageFile, saveDatasetMasks } from './datasetStorage.mjs';
-import { convertTiffBufferToPngDataUrl } from './tiffConversion.mjs';
+import { convertTiffBufferToPngDataUrl, hasTiffSignature } from './tiffConversion.mjs';
 
 const __dirname = fileURLToPath(new URL('.', import.meta.url));
 const rootDir = resolve(__dirname, '..');
@@ -36,7 +36,7 @@ const server = createServer(async (request, response) => {
       );
       const payload = { folderName: result.folderName, path: result.path };
 
-      if (isTiffFilename(String(imageFileName))) {
+      if (isTiffFilename(String(imageFileName)) || hasTiffSignature(imageBuffer)) {
         payload.imageDataUrl = await convertTiffBufferToPngDataUrl(imageBuffer);
       }
 

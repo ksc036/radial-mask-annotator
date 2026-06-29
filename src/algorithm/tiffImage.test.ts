@@ -1,6 +1,6 @@
 import * as UTIF from 'utif';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { decodeTiffBufferToImage, decodeTiffFileToImage, getTiffDisplayRgba, isTiffFile } from './tiffImage';
+import { decodeTiffBufferToImage, decodeTiffFileToImage, getTiffDisplayRgba, isTiffFile, isTiffImageFile } from './tiffImage';
 
 describe('TIFF image loading', () => {
   const originalImage = globalThis.Image;
@@ -15,6 +15,12 @@ describe('TIFF image loading', () => {
     expect(isTiffFile(new File(['x'], 'sample.TIFF', { type: '' }))).toBe(true);
     expect(isTiffFile(new File(['x'], 'sample.bin', { type: 'image/tiff' }))).toBe(true);
     expect(isTiffFile(new File(['x'], 'sample.png', { type: 'image/png' }))).toBe(false);
+  });
+
+  it('recognizes TIFF files by byte signature even with a png extension', async () => {
+    const mislabeledTiff = new File([new Uint8Array([0x4d, 0x4d, 0x00, 0x2a])], '10K-5.png', { type: 'image/png' });
+
+    await expect(isTiffImageFile(mislabeledTiff)).resolves.toBe(true);
   });
 
   it('loads TIFF files through the server PNG conversion endpoint', async () => {

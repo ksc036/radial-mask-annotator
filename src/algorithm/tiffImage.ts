@@ -7,6 +7,22 @@ export function isTiffFile(file: Pick<File, 'name' | 'type'>) {
   return TIFF_MIME_TYPES.has(file.type.toLowerCase()) || TIFF_EXTENSIONS.test(file.name);
 }
 
+export async function isTiffImageFile(file: File) {
+  if (isTiffFile(file)) {
+    return true;
+  }
+
+  const header = new Uint8Array(await file.slice(0, 4).arrayBuffer());
+  return hasTiffSignature(header);
+}
+
+function hasTiffSignature(bytes: Uint8Array) {
+  return (
+    (bytes[0] === 0x49 && bytes[1] === 0x49 && bytes[2] === 0x2a && bytes[3] === 0x00) ||
+    (bytes[0] === 0x4d && bytes[1] === 0x4d && bytes[2] === 0x00 && bytes[3] === 0x2a)
+  );
+}
+
 export async function decodeTiffFileToImage(file: File) {
   const response = await fetch('/api/convert-tiff', {
     method: 'POST',

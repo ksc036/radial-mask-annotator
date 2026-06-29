@@ -306,6 +306,40 @@ describe('App', () => {
     expect(screen.getByText(/Image saved to 2026-06-11_17-30-22_nucleus/i)).toBeInTheDocument();
   });
 
+  it('uploads TIFF content through the TIFF path even when the file extension is png', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        folderName: '2026-06-11_17-30-22_10K-5',
+        imageDataUrl: 'data:image/png;base64,cHJldmlldw==',
+      }),
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    render(<App />);
+
+    fireEvent.change(screen.getByLabelText(/upload image/i), {
+      target: {
+        files: [new File([new Uint8Array([0x4d, 0x4d, 0x00, 0x2a])], '10K-5.png', { type: 'image/png' })],
+      },
+    });
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith(
+        '/api/upload-image-file',
+        expect.objectContaining({
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/octet-stream',
+            'X-Filename': '10K-5.png',
+          },
+        }),
+      );
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(screen.getByText(/Image saved to 2026-06-11_17-30-22_10K-5/i)).toBeInTheDocument();
+  });
+
   it('opens the file picker when the empty canvas requests upload', () => {
     const inputClick = vi.spyOn(HTMLInputElement.prototype, 'click').mockImplementation(() => undefined);
 

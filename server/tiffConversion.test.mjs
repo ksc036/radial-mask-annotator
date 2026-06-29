@@ -1,8 +1,14 @@
 import sharp from 'sharp';
 import { describe, expect, it } from 'vitest';
-import { convertTiffBufferToPngDataUrl } from './tiffConversion.mjs';
+import { convertTiffBufferToPngDataUrl, hasTiffSignature } from './tiffConversion.mjs';
 
 describe('TIFF conversion', () => {
+  it('recognizes TIFF buffers by byte signature', () => {
+    expect(hasTiffSignature(Buffer.from([0x49, 0x49, 0x2a, 0x00]))).toBe(true);
+    expect(hasTiffSignature(Buffer.from([0x4d, 0x4d, 0x00, 0x2a]))).toBe(true);
+    expect(hasTiffSignature(Buffer.from([0x89, 0x50, 0x4e, 0x47]))).toBe(false);
+  });
+
   it('converts deflate-compressed RGB TIFF images into visible PNG data URLs', async () => {
     const tiffBuffer = await sharp(
       Buffer.from([
